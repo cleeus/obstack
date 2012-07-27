@@ -45,7 +45,16 @@ public:
 		CTOR_2_C_C,
 		CTOR_2_NC_C,
 		CTOR_2_C_NC,
-		CTOR_2_NC_NC
+		CTOR_2_NC_NC,
+		CTOR_3_C_C_C,
+		CTOR_3_NC_C_C,
+		CTOR_3_C_NC_C,
+		CTOR_3_C_C_NC,
+		CTOR_3_C_NC_NC,
+		CTOR_3_NC_C_NC,
+		CTOR_3_NC_NC_C,
+		CTOR_3_NC_NC_NC,
+		CTOR_10_ALL_C
 	};
 
 	CTOR_TYPE called;
@@ -57,6 +66,29 @@ public:
 	CtorManiac(std::string &, const std::string &) : called(CTOR_2_NC_C) {}
 	CtorManiac(const std::string &, std::string &) : called(CTOR_2_C_NC) {}
 	CtorManiac(std::string &, std::string &) : called(CTOR_2_NC_NC) {}
+	
+	CtorManiac(const std::string &, const std::string &, const std::string &) : called(CTOR_3_C_C_C) {}
+	CtorManiac(std::string &, const std::string &, const std::string &) : called(CTOR_3_NC_C_C) {}
+	CtorManiac(const std::string &, std::string &, const std::string &) : called(CTOR_3_C_NC_C) {}
+	CtorManiac(const std::string &, const std::string &, std::string &) : called(CTOR_3_C_C_NC) {}
+	CtorManiac(const std::string &, std::string &, std::string &) : called(CTOR_3_C_NC_NC) {}
+	CtorManiac(std::string &, const std::string &, std::string &) : called(CTOR_3_NC_C_NC) {}
+	CtorManiac(std::string &, std::string &, const std::string &) : called(CTOR_3_NC_NC_C) {}
+	CtorManiac(std::string &, std::string &, std::string &) : called(CTOR_3_NC_NC_NC) {}
+
+	CtorManiac(
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &,
+		const std::string &
+	) : called(CTOR_10_ALL_C) {}
+
 
 };
 
@@ -190,6 +222,102 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_nc_nc ) {
 	
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_2_NC_NC);
 }
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_c_c ) {
+	boost::obstack::obstack vs(default_size);
+
+	CtorManiac *foo = vs.alloc<CtorManiac>("","", "");
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_C_C);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_c_c ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a1;
+	CtorManiac *foo = vs.alloc<CtorManiac>(a1,"", "");
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_C_C);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_nc_c ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a2;
+	CtorManiac *foo = vs.alloc<CtorManiac>("", a2, "");
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_NC_C);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_c_nc ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a3;
+	CtorManiac *foo = vs.alloc<CtorManiac>("", "", a3);
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_C_NC);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_nc_nc ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a2;
+	std::string a3;
+	CtorManiac *foo = vs.alloc<CtorManiac>("", a2, a3);
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_NC_NC);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_c_nc ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a1;
+	std::string a3;
+	CtorManiac *foo = vs.alloc<CtorManiac>(a1, "", a3);
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_C_NC);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_nc_c ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a1;
+	std::string a2;
+	CtorManiac *foo = vs.alloc<CtorManiac>(a1, a2, "");
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_NC_C);
+}
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_nc_nc ) {
+	boost::obstack::obstack vs(default_size);
+
+	std::string a1;
+	std::string a2;
+	std::string a3;
+	CtorManiac *foo = vs.alloc<CtorManiac>(a1, a2, a3);
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_NC_NC);
+}
+
+BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_10_all_c ) {
+	boost::obstack::obstack vs(default_size);
+
+	CtorManiac *foo = vs.alloc<CtorManiac>("", "", "", "", "", "", "", "", "", "");
+
+	BOOST_REQUIRE( foo != NULL );
+	
+	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_10_ALL_C);
+}
+
+
 
 
 BOOST_AUTO_TEST_SUITE_END()

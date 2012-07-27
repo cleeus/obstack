@@ -3,9 +3,9 @@ obstack
 
 A C++ memory arena implementation with O(1) complexity.
 
-Obstack is a memory arean which can allocate objects in
-a preallicated memory region of fixed size (arena)
-It organizes memory in terms of a stack of objects.
+Obstack is a memory arena which can allocate objects in
+a preallocated memory region of fixed size (the arena).
+It organizes memory in a stack of objects.
 All memory operations are O(1). This is achieved
 with a memory allocation strategy known as pointer bumping.
 

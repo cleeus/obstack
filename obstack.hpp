@@ -45,9 +45,9 @@ namespace detail {
  * TODO use allocators to reserve raw memory
  * TODO support shared pointers from obstack
  * TODO support arrays on obstack
- * TODO optional security checks
- * TODO remove all C-style casts
- * TODO perfect forwarding constructors
+ * TODO perfect forwarding constructors with refref and variadic templates
+ * TODO implement an allocator on top of obstack
+ * TODO deal with exceptions in dealloc_all and the destructor
  */
 class obstack {
 public:
@@ -116,6 +116,43 @@ public:
 	T* alloc(T1 &a1, T2 &a2, const T3 &a3) { return mem_available<T>() ? push<T>(a1, a2, a3) : NULL; }
 	template<typename T, typename T1, typename T2, typename T3>
 	T* alloc(T1 &a1, T2 &a2, T3 &a3) { return mem_available<T>() ? push<T>(a1, a2, a3) : NULL; }
+
+	//with more then 3 arguments, binomial explosion really sets in, so we can just support const
+	
+	template<typename T, typename T1, typename T2, typename T3, typename T4>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4) : NULL;
+	}
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4, a5) : NULL;
+	}
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4, a5, a6) : NULL;
+	}
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4, a5, a6, a7) : NULL;
+	}
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4, a5, a6, a7, a8) : NULL;
+	}
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8, const T9 &a9) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4, a5, a6, a7, a8, a9) : NULL;
+	}
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9, typename T10>
+	T* alloc(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8, const T9 &a9, const T10 &a10) {
+		return mem_available<T>() ? push<T>(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) : NULL;
+	}
+
+
+
+
+
+
 
 
 
@@ -200,8 +237,42 @@ private:
 	T* push(T1 &a1, T2 &a2, T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
 
 
-
-
+  template<typename T, typename T1, typename T2, typename T3, typename T4>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4);
+	}
+  template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5);
+	}
+  template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6);
+	}
+  template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7);
+	}
+  template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7, a8);
+	}
+  template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8, const T9 &a9) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9);
+	}
+  template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9, typename T10>
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8, const T9 &a9, const T10 &a10) {
+		allocate<T>();
+		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+	}
+ 
 
 
 
@@ -292,7 +363,7 @@ private:
 
 
 private:
-	//encrypted address of invalid_function_fptr, used to makr dtor as called/invalid
+	//encrypted address of invalid_function_fptr, used to mark dtor as called/invalid
 	const dtor_fptr not_a_dtor;
 	//top of stack pointer
 	byte_type *tos;
