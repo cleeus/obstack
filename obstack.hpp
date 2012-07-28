@@ -51,15 +51,16 @@ namespace detail {
  * |  |           |  |        |         |  |        |       |
  * ------------------------------...---------------------...-
  * ^                                    ^           ^       ^
- * mem                                  prior       tos     end_of_mem
+ * mem                                  top_chunk   tos     end_of_mem
  *
  *
  * TODO use allocators to reserve raw memory
  * TODO support shared pointers from obstack
  * TODO support arrays on obstack
  * TODO support obstack nesting
- * TODO perfect forwarding constructors with refref and variadic templates
+ * TODO C++11 perfect forwarding constructors with refref and variadic templates
  * TODO implement an allocator on top of obstack
+ * TODO check pointers in dealloc in DEBUG builds
  * TODO deal with exceptions in dealloc_all and the destructor
  */
 class obstack {
@@ -75,21 +76,29 @@ private:
 	typedef void (*dtor_fptr)(void*);
 
 	struct chunk_header {
-		chunk_header *prior;
-		size_type object_size;
+		chunk_header *prev;
 		dtor_fptr dtor;
 	};
 
 	struct typed_void {};
 
 public:
-	obstack(size_type size)
+	/**
+	 * \brief construct and obstack of a given size
+	 *
+	 * The size of an obstack is its capacity in bytes.
+	 * When reasoning about the required size, consider the overhead required
+	 * for allocating each object on the obstack.
+	 *
+	 * \see obstack::overhead
+	 */
+	obstack(size_type capacity)
 		: not_a_dtor(crypt_fptr(&detail::not_a_dtor))
 	{
-		prior = NULL;
-		mem = new byte_type[size];
+		top_chunk = NULL;
+		mem = new byte_type[capacity];
 		tos = mem;
-		end_of_mem = mem + size;
+		end_of_mem = mem + capacity;
 	}
 
 	~obstack() {
@@ -163,6 +172,17 @@ public:
 
 
 
+	/**
+	 * \brief destruct an object on the obstack and reclaim memory if possible
+	 *
+	 * When the given object is on the top of the stack,
+	 * it will be destructed and its memory will be available emediatly.
+	 * Otherwise it will only be destructed but its memory will be blocked
+	 * by objects in front of it.
+	 *
+	 * When the given obj pointer is not a valid object on this obstack
+	 * the behaviour is undefined. In most cases it will result in a crash.
+	 */
 	void dealloc(void * const obj) {
 		if(obj) {
 			typed_void * const typed_obj = to_typed_void(obj);
@@ -174,33 +194,44 @@ public:
 		}
 	}
 
+	/**
+	 * \brief destruct and reclaim memory of all objects on the obstack
+	 */
 	void dealloc_all() {
-		while(prior) {
-			pop(prior);
+		while(top_chunk) {
+			pop(top_chunk);
 		}
 	}
 
+	/**
+	 * \brief check whether a given object is on the top of the obstack
+	 */
 	bool is_top(const void *obj) const {
 		const chunk_header * const chead = to_chunk_header(to_typed_void(obj));
-		return (static_cast<const byte_type*>(obj) + chead->object_size) == tos;
+		return chead == top_chunk;
 	}
 
-	size_type overhead(unsigned int number_of_elements) {
+	/**
+	 * \brief calculate the overhead in bytes required for allocating a number of elements
+	 */
+	static size_type overhead(size_type number_of_elements) {
 		return sizeof(chunk_header) * number_of_elements;
 	}
 
+	///get the number of bytes that are already allocated
 	size_type size() const { return static_cast<size_type>(tos-mem); }
+	///get the number of bytes that are available in the obstack in total
 	size_type capacity() const { return static_cast<size_type>(end_of_mem-mem); }
 
 private:
-	typed_void * to_typed_void(void *obj) const {
+	static typed_void * to_typed_void(void *obj) {
 		return reinterpret_cast<typed_void*>(obj);
 	}
-	const typed_void * to_typed_void(const void *obj) const {
+	static const typed_void * to_typed_void(const void *obj) {
 		return reinterpret_cast<const typed_void*>(obj);
 	}
 	
-	dtor_fptr crypt_fptr(dtor_fptr const fptr) const {
+	static dtor_fptr crypt_fptr(dtor_fptr const fptr) {
 		return reinterpret_cast<dtor_fptr>(
 			reinterpret_cast<size_t>(fptr) ^ reinterpret_cast<size_t>(detail::fptr_cookie)
 		);
@@ -293,10 +324,9 @@ private:
 	template<typename T>
 	void allocate() {
 		chunk_header * const chead = new(tos) chunk_header();	
-		chead->prior = prior;
-		chead->object_size = sizeof(T);
+		chead->prev = top_chunk;
 		chead->dtor = crypt_fptr(&detail::call_dtor<T>);
-		prior = chead;
+		top_chunk = chead;
 		
 		// allocate memory
 		tos += sizeof(chunk_header) + sizeof(T);
@@ -338,17 +368,16 @@ private:
 		dtor(obj);
 	}
 
-	chunk_header *to_chunk_header(typed_void * const obj) const {
+	static chunk_header *to_chunk_header(typed_void * const obj) {
 		return reinterpret_cast<chunk_header*>(reinterpret_cast<byte_type*>(obj) - sizeof(chunk_header));
 	}
-	const chunk_header *to_chunk_header(const typed_void * const obj) const {
+	static const chunk_header *to_chunk_header(const typed_void * const obj) {
 		return reinterpret_cast<const chunk_header*>(reinterpret_cast<const byte_type*>(obj) - sizeof(chunk_header));
 	}
-
-
-	typed_void *to_object(chunk_header * const chead) const {
+	static typed_void *to_object(chunk_header * const chead) {
 		return to_typed_void(reinterpret_cast<byte_type*>(chead)+sizeof(chunk_header));
 	}
+
 
 	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
 		dtor_fptr const dtor = crypt_fptr(chead->dtor);
@@ -358,15 +387,15 @@ private:
 
 
 	/**
-	 * \brief rewind tos and prior pointers as far as possible
+	 * \brief rewind tos and top_chunk pointers as far as possible
 	 *
 	 * complexity: O(k) where k is the number of consecutive destructed chunks
 	 */
 	void deallocate_as_possible() {
-		while(prior && (prior->dtor == not_a_dtor)) {
+		while(top_chunk && (top_chunk->dtor == not_a_dtor)) {
 			//deallocate memory
-			tos = reinterpret_cast<byte_type*>(prior);
-			prior = prior->prior;
+			tos = reinterpret_cast<byte_type*>(top_chunk);
+			top_chunk = top_chunk->prev;
 		}
 	}
 
@@ -377,12 +406,12 @@ private:
 	const dtor_fptr not_a_dtor;
 	//top of stack pointer
 	byte_type *tos;
+	//points to the chunk_header before the current tos
+	chunk_header *top_chunk;
 	//reserved memory
 	byte_type *mem;
 	//end of reserved memory region
 	byte_type *end_of_mem;
-	//points to the chunk_header before the current tos
-	chunk_header *prior;
 };
 
 } //namespace obstack

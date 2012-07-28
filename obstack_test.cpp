@@ -381,6 +381,24 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_10_all_c ) {
 }
 
 
+BOOST_AUTO_TEST_CASE( obstack_is_top_one_elem) {
+	obstack vs(default_size);
+
+	Sensor *s = vs.alloc<Sensor>();
+	BOOST_CHECK( vs.is_top(s) );
+}
+
+BOOST_AUTO_TEST_CASE( obstack_is_top_two_elems) {
+	obstack vs(default_size);
+
+	Sensor *s1 = vs.alloc<Sensor>();
+	Sensor *s2 = vs.alloc<Sensor>();
+
+	BOOST_CHECK( vs.is_top(s2) );
+	BOOST_CHECK( !vs.is_top(s1) );
+}
+
+
 BOOST_AUTO_TEST_CASE( obstack_nesting ) {
 
 	_num_dtor_calls = 0;
