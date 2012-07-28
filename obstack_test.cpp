@@ -8,6 +8,9 @@
 
 #include "obstack.hpp"
 
+
+using boost::obstack::obstack;
+
 BOOST_AUTO_TEST_SUITE(obstack_all)
 
 class Sensor {
@@ -95,14 +98,14 @@ public:
 static const size_t default_size = 64*1024;
 
 BOOST_AUTO_TEST_CASE( obstack_size_capacity) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	BOOST_CHECK( vs.size() == 0 );
 	BOOST_CHECK( vs.capacity() == default_size );
 }
 
 BOOST_AUTO_TEST_CASE( obstack_single_push ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	Sensor *s = vs.alloc<Sensor>();
 
@@ -121,7 +124,7 @@ BOOST_AUTO_TEST_CASE( obstack_dtor_called_on_delete ) {
 
 	_num_dtor_calls = 0;
 	
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 	Sensor *s = vs.alloc<Sensor>();
 	s->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
 	
@@ -138,7 +141,7 @@ BOOST_AUTO_TEST_CASE( obstack_dtor_called_on_dealloc_all ) {
 
 	_num_dtor_calls = 0;
 	
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 	Sensor *s = vs.alloc<Sensor>();
 	s->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
 	
@@ -148,14 +151,29 @@ BOOST_AUTO_TEST_CASE( obstack_dtor_called_on_dealloc_all ) {
 
 	BOOST_CHECK_EQUAL( vs.size(), 0 );
 	BOOST_CHECK_EQUAL( _num_dtor_calls, 1 );
+}
+
+BOOST_AUTO_TEST_CASE( obstack_dtor_delete_all_chain ) {
+
+	_num_dtor_calls = 0;
+
+	obstack vs(default_size);
+	for(int i=0; i<10; i++) {
+		Sensor *s = vs.alloc<Sensor>();
+		s->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
+	}
+	vs.dealloc_all();
+
+	BOOST_CHECK_EQUAL( _num_dtor_calls, 10 );
 
 }
+
 
 BOOST_AUTO_TEST_CASE( obstack_dtor_called_on_scope_exit ) {
 
 	_num_dtor_calls = 0;
 	{
-		boost::obstack::obstack vs(default_size);
+		obstack vs(default_size);
 		Sensor *s = vs.alloc<Sensor>();
 		s->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
 		BOOST_CHECK( vs.size() > 0 );
@@ -165,7 +183,7 @@ BOOST_AUTO_TEST_CASE( obstack_dtor_called_on_scope_exit ) {
 }
 
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_1_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 	CtorManiac *foo = vs.alloc<CtorManiac>("");
 
 	BOOST_REQUIRE( foo != NULL );
@@ -173,7 +191,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_1_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_1_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_1_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	CtorManiac *foo = vs.alloc<CtorManiac>(a1);
@@ -183,7 +201,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_1_nc ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_1_NC);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_c_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	CtorManiac *foo = vs.alloc<CtorManiac>("","");
 
@@ -192,7 +210,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_c_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_2_C_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_nc_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	CtorManiac *foo = vs.alloc<CtorManiac>(a1,"");
@@ -202,7 +220,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_nc_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_2_NC_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_c_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a2;
 	CtorManiac *foo = vs.alloc<CtorManiac>("",a2);
@@ -212,7 +230,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_c_nc ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_2_C_NC);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_nc_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	std::string a2;
@@ -223,7 +241,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_2_nc_nc ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_2_NC_NC);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_c_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	CtorManiac *foo = vs.alloc<CtorManiac>("","", "");
 
@@ -232,7 +250,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_c_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_C_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_c_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	CtorManiac *foo = vs.alloc<CtorManiac>(a1,"", "");
@@ -242,7 +260,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_c_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_C_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_nc_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a2;
 	CtorManiac *foo = vs.alloc<CtorManiac>("", a2, "");
@@ -252,7 +270,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_nc_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_NC_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_c_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a3;
 	CtorManiac *foo = vs.alloc<CtorManiac>("", "", a3);
@@ -262,7 +280,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_c_nc ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_C_NC);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_nc_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a2;
 	std::string a3;
@@ -273,7 +291,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_c_nc_nc ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_C_NC_NC);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_c_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	std::string a3;
@@ -284,7 +302,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_c_nc ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_C_NC);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_nc_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	std::string a2;
@@ -295,7 +313,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_nc_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_3_NC_NC_C);
 }
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_nc_nc ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	std::string a1;
 	std::string a2;
@@ -308,7 +326,7 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_3_nc_nc_nc ) {
 }
 
 BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_10_all_c ) {
-	boost::obstack::obstack vs(default_size);
+	obstack vs(default_size);
 
 	CtorManiac *foo = vs.alloc<CtorManiac>("", "", "", "", "", "", "", "", "", "");
 
@@ -317,6 +335,31 @@ BOOST_AUTO_TEST_CASE( obstack_ctor_fwd_10_all_c ) {
 	BOOST_CHECK_EQUAL(foo->called, CtorManiac::CTOR_10_ALL_C);
 }
 
+
+BOOST_AUTO_TEST_CASE( obstack_nesting ) {
+
+	_num_dtor_calls = 0;
+
+	{
+		obstack l1(default_size);
+		obstack *l2 = l1.alloc<obstack>(default_size);
+		BOOST_REQUIRE( l2 != NULL );
+		obstack *l3 = l2->alloc<obstack>(default_size);
+		BOOST_REQUIRE( l3 != NULL );
+		
+		
+		Sensor *s1 = l1.alloc<Sensor>();
+		BOOST_REQUIRE( s1 != NULL);
+		Sensor *s2 = l3->alloc<Sensor>();
+		BOOST_REQUIRE( s2 != NULL);
+
+		s1->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
+		s2->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
+	}
+
+
+	BOOST_CHECK_EQUAL( _num_dtor_calls, 2 );
+}
 
 
 
