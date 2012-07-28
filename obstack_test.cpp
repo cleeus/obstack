@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <vector>
+
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE obstack_test
@@ -167,6 +169,49 @@ BOOST_AUTO_TEST_CASE( obstack_dtor_delete_all_chain ) {
 	BOOST_CHECK_EQUAL( _num_dtor_calls, 10 );
 
 }
+
+BOOST_AUTO_TEST_CASE( obstack_dtor_dealloc_reverse ) {
+
+	_num_dtor_calls = 0;
+
+	std::vector<Sensor*> sensors;
+	obstack vs(default_size);
+	for(int i=0; i<10; i++) {
+		Sensor *s = vs.alloc<Sensor>();
+		s->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
+		sensors.push_back(s);
+	}
+
+	for(size_t i=1; i<=10; i++) {
+		Sensor *s = sensors[sensors.size()-i];
+		vs.dealloc(s);
+		BOOST_CHECK_EQUAL( _num_dtor_calls, i );
+	}
+
+	BOOST_CHECK_EQUAL( _num_dtor_calls, 10 );
+}
+
+BOOST_AUTO_TEST_CASE( obstack_dtor_dealloc_forward ) {
+
+	_num_dtor_calls = 0;
+
+	std::vector<Sensor*> sensors;
+	obstack vs(default_size);
+	for(int i=0; i<10; i++) {
+		Sensor *s = vs.alloc<Sensor>();
+		s->set_dtor_callback(&obstack_dtor_called_on_scope_exit_func);
+		sensors.push_back(s);
+	}
+
+	for(size_t i=1; i<=10; i++) {
+		Sensor *s = sensors[i-1];
+		vs.dealloc(s);
+		BOOST_CHECK_EQUAL( _num_dtor_calls, i );
+	}
+
+	BOOST_CHECK_EQUAL( _num_dtor_calls, 10 );
+}
+
 
 
 BOOST_AUTO_TEST_CASE( obstack_dtor_called_on_scope_exit ) {

@@ -42,9 +42,22 @@ namespace detail {
  * on the obstack. For security reasons, these function pointers are encrypted
  * with a random cookie which is initialized on startup.
  *
+ *
+ * The memory layout looks like this:
+ *
+ * |chunk_header  |chunk_header         |chunk_header
+ * |  | object    |  | object |         |  | object |
+ * ______________________________..._____________________..._
+ * |  |           |  |        |         |  |        |       |
+ * ------------------------------...---------------------...-
+ * ^                                    ^           ^       ^
+ * mem                                  prior       tos     end_of_mem
+ *
+ *
  * TODO use allocators to reserve raw memory
  * TODO support shared pointers from obstack
  * TODO support arrays on obstack
+ * TODO support obstack nesting
  * TODO perfect forwarding constructors with refref and variadic templates
  * TODO implement an allocator on top of obstack
  * TODO deal with exceptions in dealloc_all and the destructor
@@ -150,17 +163,9 @@ public:
 
 
 
-
-
-
-
-
-
-
-
 	void dealloc(void * const obj) {
-		typed_void * const typed_obj = to_typed_void(obj);
-		if(typed_obj) {
+		if(obj) {
+			typed_void * const typed_obj = to_typed_void(obj);
 			if(is_top(typed_obj)) {
 				pop(typed_obj);
 			} else {
@@ -170,14 +175,14 @@ public:
 	}
 
 	void dealloc_all() {
-		while(tos>mem && prior) {
+		while(prior) {
 			pop(prior);
 		}
 	}
 
-	bool is_top(void *obj) const {
-		const chunk_header * const chead = find_chunk_header(to_typed_void(obj));
-		return (static_cast<byte_type*>(obj) + chead->object_size) == tos;
+	bool is_top(const void *obj) const {
+		const chunk_header * const chead = to_chunk_header(to_typed_void(obj));
+		return (static_cast<const byte_type*>(obj) + chead->object_size) == tos;
 	}
 
 	size_type overhead(unsigned int number_of_elements) {
@@ -191,15 +196,18 @@ private:
 	typed_void * to_typed_void(void *obj) const {
 		return reinterpret_cast<typed_void*>(obj);
 	}
+	const typed_void * to_typed_void(const void *obj) const {
+		return reinterpret_cast<const typed_void*>(obj);
+	}
 	
-	dtor_fptr crypt_fptr(dtor_fptr const fptr) {
+	dtor_fptr crypt_fptr(dtor_fptr const fptr) const {
 		return reinterpret_cast<dtor_fptr>(
 			reinterpret_cast<size_t>(fptr) ^ reinterpret_cast<size_t>(detail::fptr_cookie)
 		);
 	}
 
 	template<typename T>
-	bool mem_available() {
+	bool mem_available() const {
 		return tos + sizeof(chunk_header) + sizeof(T) < end_of_mem;
 	}
 
@@ -294,32 +302,33 @@ private:
 		tos += sizeof(chunk_header) + sizeof(T);
 	}
 	
+	
 	void pop(chunk_header * const chead) {
-		typed_void * const obj = find_object(chead);
+		typed_void * const obj = to_object(chead);
 		pop(chead, obj);
 	}
 
 	void pop(typed_void * const obj) {
-		chunk_header * const chead = find_chunk_header(obj);
+		chunk_header * const chead = to_chunk_header(obj);
 		pop(chead, obj);
 	}
 
 	void pop(chunk_header * const chead, typed_void * const obj) {
 		dtor_fptr dtor = mark_as_destructed(chead);	
 	
-		deallocate_as_possible(chead);
+		deallocate_as_possible();
 
 		//might throw
 		dtor(obj);
 	}
 
 	void destruct(typed_void *obj) {
-		chunk_header * const chead = find_chunk_header(obj);
+		chunk_header * const chead = to_chunk_header(obj);
 		destruct(chead, obj);
 	}
 
 	void destruct(chunk_header * const chead) {
-		typed_void * const obj = find_object(chead);
+		typed_void * const obj = to_object(chead);
 		destruct(chead, obj);
 	}
 
@@ -329,35 +338,36 @@ private:
 		dtor(obj);
 	}
 
-	chunk_header *find_chunk_header(typed_void * const obj) const {
+	chunk_header *to_chunk_header(typed_void * const obj) const {
 		return reinterpret_cast<chunk_header*>(reinterpret_cast<byte_type*>(obj) - sizeof(chunk_header));
 	}
+	const chunk_header *to_chunk_header(const typed_void * const obj) const {
+		return reinterpret_cast<const chunk_header*>(reinterpret_cast<const byte_type*>(obj) - sizeof(chunk_header));
+	}
 
-	typed_void *find_object(chunk_header * const chead) const {
+
+	typed_void *to_object(chunk_header * const chead) const {
 		return to_typed_void(reinterpret_cast<byte_type*>(chead)+sizeof(chunk_header));
 	}
 
-	dtor_fptr mark_as_destructed(chunk_header * const chead) {
+	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
 		dtor_fptr const dtor = crypt_fptr(chead->dtor);
 		chead->dtor = not_a_dtor;
 		return dtor;
 	}
 
-	dtor_fptr mark_as_destructed(typed_void *p) {
-		chunk_header * const chead = find_chunk_header(p);
-		return mark_as_destructed(chead);
-	}
 
-	void deallocate_as_possible(chunk_header *chead) {
-		while(chead && (chead->dtor == not_a_dtor)) {
+	/**
+	 * \brief rewind tos and prior pointers as far as possible
+	 *
+	 * complexity: O(k) where k is the number of consecutive destructed chunks
+	 */
+	void deallocate_as_possible() {
+		while(prior && (prior->dtor == not_a_dtor)) {
 			//deallocate memory
-			tos = (byte_type*)chead;
-			chead = chead->prior;
+			tos = reinterpret_cast<byte_type*>(prior);
+			prior = prior->prior;
 		}
-
-		//update prior pointer for next allocation
-		prior = chead ? chead->prior : NULL;
-
 	}
 
 
@@ -371,7 +381,7 @@ private:
 	byte_type *mem;
 	//end of reserved memory region
 	byte_type *end_of_mem;
-	//points to the chunk before the current tos
+	//points to the chunk_header before the current tos
 	chunk_header *prior;
 };
 
