@@ -84,9 +84,9 @@ private:
 
 public:
 	/**
-	 * \brief construct and obstack of a given size
+	 * \brief construct an obstack of a given capacity
 	 *
-	 * The size of an obstack is its capacity in bytes.
+	 * The capacity of an obstack is the number of bytes for later use.
 	 * When reasoning about the required size, consider the overhead required
 	 * for allocating each object on the obstack.
 	 *
@@ -106,6 +106,9 @@ public:
 		delete[] mem;
 	}
 
+	/**
+	 * \brief Allocate an object of type T on the obstack
+	 */
 	template<class T>
 	T* alloc() { return mem_available<T>() ? push<T>() : NULL; }	
 	template<typename T, typename T1>
@@ -323,7 +326,7 @@ private:
 
 	template<typename T>
 	void allocate() {
-		chunk_header * const chead = new(tos) chunk_header();	
+		chunk_header * const chead = reinterpret_cast<chunk_header*>(tos);
 		chead->prev = top_chunk;
 		chead->dtor = crypt_fptr(&detail::call_dtor<T>);
 		top_chunk = chead;
