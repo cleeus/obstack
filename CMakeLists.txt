@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 find_package(Boost COMPONENTS random unit_test_framework REQUIRED)
 
 
-add_definitions(-pedantic -Wall)
+add_definitions(-pedantic -Wall -O2)
 
 add_library(obstack
 	obstack.cpp
