@@ -119,8 +119,6 @@ namespace detail {
  * TODO support arrays of complex types
  * TODO support array Ts in normal alloc
  *
- * TODO allow using preallocated memory
- *
  * TODO support shared pointers from obstack
  * TODO support obstack nesting
  * TODO C++11 perfect forwarding constructors with refref and variadic templates
@@ -149,8 +147,9 @@ private:
 
 public:
 	/**
-	 * \brief construct an obstack of a given capacity
+	 * \brief construct an obstack of a given capacity on the heap
 	 *
+	 * Use the global heap (malloc/free) to acquire memory.
 	 * The capacity of an obstack is the number of bytes for later use.
 	 * When reasoning about the required size, consider the overhead required
 	 * for allocating each object on the obstack which consists of the size
@@ -160,14 +159,39 @@ public:
 	basic_obstack(size_type capacity)
 		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
 			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor)),
-			mem(static_cast<byte_type*>(detail::global_malloc_allocator.alloc(capacity))),
-			end_of_mem(mem+capacity),
+			mem(capacity ? static_cast<byte_type*>(detail::global_malloc_allocator.alloc(capacity)) : NULL),
+			end_of_mem(mem ? mem+capacity : NULL),
 			mem_guard(mem, detail::global_malloc_deallocator)
 	{
-		//TODO if(!mem) throw std::bad_alloc
+		BOOST_ASSERT_MSG(capacity, "obstack with capacity of 0 requested");
+		BOOST_ASSERT_MSG(mem, "global_malloc_allocator returned NULL");
 		tos = mem;
 		top_chunk = NULL;
 	}
+
+	/**
+	 * \brief construct an obstack on the given memory buffer
+	 *
+	 * buffer must be a block of memory at least the size of the
+	 * alignment. The obstack will not free the memory upon
+	 * its destruction, the user is responsible for the management of
+	 * the buffer memory.
+	 */
+	basic_obstack(void *buffer, size_type buffer_size)
+		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
+			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor)),
+			mem(buffer_size && buffer_size ? static_cast<byte_type*>(buffer)+offset_to_alignment(buffer) : NULL),
+			end_of_mem(buffer ? static_cast<byte_type*>(buffer)+buffer_size : NULL),
+			mem_guard(NULL, detail::global_null_deallocator)
+	{
+		BOOST_ASSERT_MSG(mem, "buffer or buffer_size seems to be NULL");
+		BOOST_ASSERT_MSG(mem < static_cast<byte_type*>(buffer)+buffer_size, "buffer_size to small for alignment offset");
+		tos = mem;
+		top_chunk = NULL;
+	}
+
+
+
 
 	~basic_obstack() {
 		dealloc_all();
@@ -345,6 +369,11 @@ private:
 	template<typename T>
 	static size_type aligned_sizeof() {
 		return aligned_sizeof(sizeof(T));
+	}
+
+	static size_type offset_to_alignment(const void * const p) {
+		const size_type address = reinterpret_cast<size_type>(p);
+		return address % alignment ? (alignment - address%alignment): 0;
 	}
 
 	bool mem_available(size_type const size) const {

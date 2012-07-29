@@ -492,6 +492,35 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
 	BOOST_CHECK( is_aligned(s2) );
 }
 
+BOOST_AUTO_TEST_CASE( obstack_on_stack_space ) {
+	unsigned char buffer[default_size];
+	obstack vs(buffer, sizeof(buffer));
+	
+	char *c1 = vs.alloc<char>();
+	BOOST_REQUIRE( c1!=NULL );
+	BOOST_CHECK( is_aligned(c1) );
+
+	std::string *s1 = vs.alloc<std::string>("foo");
+	BOOST_REQUIRE( s1!=NULL );
+	BOOST_CHECK( is_aligned(s1) );
+	
+	char *c2 = vs.alloc<char>();
+	BOOST_REQUIRE( c2!=NULL );
+	BOOST_CHECK( is_aligned(c2) );
+
+	double *d = vs.alloc<double>();
+	BOOST_REQUIRE( d!=NULL );
+	BOOST_CHECK( is_aligned(d) );
+
+	char *c3 = vs.alloc_array<char>(3);
+	BOOST_REQUIRE( c3!=NULL );
+	BOOST_CHECK( is_aligned(c3) );
+
+	std::string *s2 = vs.alloc<std::string>("bar");
+	BOOST_REQUIRE( s2!=NULL );
+	BOOST_CHECK( is_aligned(s2) );
+}
+
 
 /*
 BOOST_AUTO_TEST_CASE( obstack_nesting ) {
