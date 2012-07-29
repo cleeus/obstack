@@ -1,6 +1,9 @@
+#include <limits>
+#include <cstdlib>
+
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
-#include <limits>
+
 
 #include "obstack.hpp"
 
@@ -47,6 +50,19 @@ static void* init_fptr_cookie() {
 }
 
 const void * const fptr_cookie = init_fptr_cookie();
+
+
+void* malloc_allocator::alloc(size_t size) {
+	return malloc(size);
+}
+
+void malloc_deallocator::dealloc(void*p) {
+	free(p);
+}
+
+malloc_allocator global_malloc_allocator;
+malloc_deallocator global_malloc_deallocator;
+null_deallocator global_null_deallocator;
 
 } //namespace detail
 } //namespace obstack

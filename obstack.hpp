@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <memory>
 
+#include <boost/utility.hpp>
 #include <boost/type_traits/alignment_of.hpp>
 #include <boost/type_traits/is_pod.hpp>
 #include <boost/static_assert.hpp>
@@ -22,7 +23,7 @@ namespace detail {
 	//random cookie used to encrypt function pointers
 	extern const void * const fptr_cookie;
 
-	struct max_alignment_finder {
+	struct struct_with_max_alignment {
 		char a;
 		short b;
 		int c;
@@ -36,9 +37,46 @@ namespace detail {
 
 	struct general_purpose_alignment {
 		enum {
-			value = alignment_of<max_alignment_finder>::value
+			value = alignment_of<struct_with_max_alignment>::value
 		};
 	};
+
+
+	struct memory_allocator_ifc {
+		virtual void* alloc(size_t size)=0;
+	};
+	struct memory_deallocator_ifc {
+		virtual void dealloc(void *p)=0;
+	};
+
+	struct memory_guard {
+		memory_guard(void* memory, memory_deallocator_ifc &deallocator)
+			: deallocator(deallocator),
+				memory(memory)
+		{}
+		~memory_guard() {
+			if(memory) {
+				deallocator.dealloc(memory);
+				memory = NULL;
+			}
+		}
+		memory_deallocator_ifc &deallocator;
+		void* memory;
+	};
+
+	struct malloc_allocator : public memory_allocator_ifc {
+		virtual void* alloc(size_t size);
+	};
+	struct malloc_deallocator : public memory_deallocator_ifc {
+		virtual void dealloc(void*p);
+	};
+	struct null_deallocator : public memory_deallocator_ifc {
+		virtual void dealloc(void*p) {}
+	};
+
+	extern malloc_allocator global_malloc_allocator;
+	extern malloc_deallocator global_malloc_deallocator;
+	extern null_deallocator global_null_deallocator;
 }
 
 /**
@@ -78,11 +116,11 @@ namespace detail {
  * mem                                          top_chunk     tos     end_of_mem
  *
  *
- * TODO support primitive types
  * TODO support arrays of complex types
  * TODO support array Ts in normal alloc
  *
- * TODO use allocators to reserve raw memory
+ * TODO allow using preallocated memory
+ *
  * TODO support shared pointers from obstack
  * TODO support obstack nesting
  * TODO C++11 perfect forwarding constructors with refref and variadic templates
@@ -90,23 +128,21 @@ namespace detail {
  * TODO check pointers in dealloc in DEBUG builds
  * TODO deal with exceptions in dealloc_all and the destructor
  */
-class obstack {
+template<int Alignment>
+class basic_obstack : noncopyable {
 public:
 	typedef unsigned char byte_type;
 	typedef std::size_t size_type;
-	enum { alignment = detail::general_purpose_alignment::value };
+	enum { alignment = Alignment };
 
 private:
-	//obstack is not copyable / assignable
-	obstack(const obstack&);
-	void operator=(const obstack&);
-	
 	typedef void (*dtor_fptr)(void*);
 
 	struct chunk_header {
 		chunk_header *prev;
 		dtor_fptr dtor;
 	};
+	BOOST_STATIC_ASSERT_MSG( alignment > 0 , "alignment must be >0");
 	BOOST_STATIC_ASSERT_MSG( sizeof(chunk_header) % alignment == 0, "alignment guarentees violated");
 
 	struct typed_void {};
@@ -121,19 +157,20 @@ public:
 	 * of the chunk_header and padding to the global alignment
 	 *
 	 */
-	obstack(size_type capacity)
+	basic_obstack(size_type capacity)
 		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
-			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor))
+			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor)),
+			mem(static_cast<byte_type*>(detail::global_malloc_allocator.alloc(capacity))),
+			end_of_mem(mem+capacity),
+			mem_guard(mem, detail::global_malloc_deallocator)
 	{
-		top_chunk = NULL;
-		mem = new byte_type[capacity];
+		//TODO if(!mem) throw std::bad_alloc
 		tos = mem;
-		end_of_mem = mem + capacity;
+		top_chunk = NULL;
 	}
 
-	~obstack() {
+	~basic_obstack() {
 		dealloc_all();
-		delete[] mem;
 	}
 
 	/**
@@ -479,22 +516,25 @@ private:
 		}
 	}
 
-
-
 private:
 	//encrypted address of not_a_dtor, used to mark dtor as called/invalid
 	const dtor_fptr free_marker_dtor_xor;
 	const dtor_fptr array_of_primitives_dtor_xor;
 
 	//top of stack pointer
-	byte_type *tos;
+	byte_type* tos;
 	//points to the chunk_header before the current tos
-	chunk_header *top_chunk;
+	chunk_header* top_chunk;
 	//reserved memory
-	byte_type *mem;
+	byte_type* const mem;
 	//end of reserved memory region
-	byte_type *end_of_mem;
+	byte_type* const end_of_mem;
+
+	detail::memory_guard mem_guard;
 };
+
+
+typedef basic_obstack<detail::general_purpose_alignment::value> obstack;
 
 } //namespace obstack
 } //namespace boost
