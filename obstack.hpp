@@ -104,9 +104,9 @@ public:
 	 *
 	 * The capacity of an obstack is the number of bytes for later use.
 	 * When reasoning about the required size, consider the overhead required
-	 * for allocating each object on the obstack.
+	 * for allocating each object on the obstack which consists of the size
+	 * of the chunk_header and padding to the global alignment
 	 *
-	 * \see obstack::overhead
 	 */
 	obstack(size_type capacity)
 		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
@@ -243,10 +243,11 @@ public:
 	}
 
 	/**
-	 * \brief calculate the overhead in bytes required for allocating a number of elements
+	 * \brief calculate the overhead in bytes required for allocating an element of a certain type
 	 */
-	static size_type overhead(size_type number_of_elements) {
-		return sizeof(chunk_header) * number_of_elements;
+	template<typename T>
+	static size_type overhead() {
+		return sizeof(chunk_header) + aligned_sizeof<T>() - sizeof(T);
 	}
 
 	///get the number of bytes that are already allocated
