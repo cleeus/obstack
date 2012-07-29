@@ -68,18 +68,19 @@ namespace detail {
  *
  * The memory layout looks like this:
  *
- * |chunk_header  |chunk_header         |chunk_header
- * |  | object    |  | object |         |  | object |
- * ______________________________..._____________________..._
- * |  |           |  |        |         |  |        |       |
- * ------------------------------...---------------------...-
- * ^                                    ^           ^       ^
- * mem                                  top_chunk   tos     end_of_mem
+ *               |padding       |padding       |padding
+ * |chunk_header ||chunk_header ||chunk_header ||chunk_header 
+ * |  | object   ||  | object   ||  | object   ||  | object   |
+ * ____________________________________________________________..._____
+ * |  |          ||  |          ||  |          ||  |          |       |
+ * ------------------------------------------------------------...-----
+ * ^                                            ^             ^       ^
+ * mem                                          top_chunk     tos     end_of_mem
  *
  *
- * TODO alignment
  * TODO support primitive types
  * TODO support arrays of complex types
+ * TODO support array Ts in normal alloc
  *
  * TODO use allocators to reserve raw memory
  * TODO support shared pointers from obstack
@@ -137,9 +138,21 @@ public:
 
 	/**
 	 * \brief Allocate an object of type T on the obstack
+	 *
+	 * Valid types for T are:
+	 *	- integral types like char, int, etc.
+	 *	- pointer types
+	 *  - complex types like structs and classes
+	 * Invalid types for T are:
+	 *  - arrays like char[42]
+	 *
+	 * alloc is templated and overloaded for up to 10 arguments.
+	 * These are passed as arguments to the constructor of T.
+	 * For up to 3 arguments, the constructors are perfect forwarding.
+	 * With more than 3 arguments, only const arguments are supported.
 	 */
-	template<class T>
-	T* alloc() { return mem_available<T>() ? push<T>() : NULL; }	
+	template<typename T>
+	T* alloc() { return mem_available<T>() ? push<T>() : NULL; }
 	template<typename T, typename T1>
 	T* alloc(const T1 &a1) { return mem_available<T>() ? push<T>(a1) : NULL; }
 	template<typename T, typename T1>
@@ -203,10 +216,16 @@ public:
 	}
 
 
+	/**
+	 * \brief Allocate a linear packed array of elements.
+	 *
+	 * T must be a POD type since there is no cunstructor called.
+	 * There will be no padding between the elements of the array.
+	 */
 	template<typename T>
-	T* alloc_array(size_type size) {
+	T* alloc_array(size_type num_elements) {
 		BOOST_STATIC_ASSERT_MSG( is_pod<T>::value, "T must be a POD type.");
-		const size_type array_bytes = aligned_sizeof(sizeof(T)*size);
+		const size_type array_bytes = aligned_sizeof(sizeof(T)*num_elements);
 		if( mem_available(array_bytes) ) {
 			allocate(array_bytes, array_of_primitives_dtor_xor);
 			return reinterpret_cast<T*>(top_object());
@@ -437,7 +456,9 @@ private:
 		return to_typed_void(reinterpret_cast<byte_type*>(chead)+sizeof(chunk_header));
 	}
 
-
+	/**
+	 * \brief mark an item on the obstack as free and decrypt the dtor pointer
+	 */
 	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
 		dtor_fptr const dtor = xor_fptr(chead->dtor);
 		chead->dtor = free_marker_dtor_xor;
