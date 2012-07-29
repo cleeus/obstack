@@ -21,10 +21,6 @@ namespace detail {
 
 	//random cookie used to encrypt function pointers
 	extern const void * const fptr_cookie;
-
-	struct alignment_dummy {
-		char x;
-	};
 }
 
 /**
@@ -190,15 +186,10 @@ public:
 	template<typename T>
 	T* alloc_array(size_type size) {
 		BOOST_STATIC_ASSERT_MSG( is_pod<T>::value, "T must be a POD type.");
-
 		const size_type array_bytes = sizeof(T)*size;
-		const size_type alignment = alignment_of<detail::alignment_dummy>::value;
-		const size_type padding_bytes = alignment - array_bytes % alignment;
-		const size_type real_size = array_bytes + padding_bytes;
-
-		if( mem_available(real_size) ) {
-			allocate(real_size, array_of_primitives_dtor_xor);
-			return reinterpret_cast<T*>(tos-real_size);
+		if( mem_available(array_bytes) ) {
+			allocate(array_bytes, array_of_primitives_dtor_xor);
+			return reinterpret_cast<T*>(tos-array_bytes);
 		} else {
 			return NULL;
 		}
