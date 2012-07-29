@@ -21,6 +21,12 @@ namespace detail {
 
 	//random cookie used to encrypt function pointers
 	extern const void * const fptr_cookie;
+
+	struct general_purpose_alignment {
+		enum {
+			value = 2*sizeof(void*)
+		};
+	};
 }
 
 /**
@@ -75,6 +81,7 @@ class obstack {
 public:
 	typedef unsigned char byte_type;
 	typedef std::size_t size_type;
+	enum { alignment = detail::general_purpose_alignment::value };
 
 private:
 	//obstack is not copyable / assignable
@@ -87,6 +94,7 @@ private:
 		chunk_header *prev;
 		dtor_fptr dtor;
 	};
+	BOOST_STATIC_ASSERT_MSG( sizeof(chunk_header) % alignment == 0, "alignment guarentees violated");
 
 	struct typed_void {};
 
@@ -186,10 +194,10 @@ public:
 	template<typename T>
 	T* alloc_array(size_type size) {
 		BOOST_STATIC_ASSERT_MSG( is_pod<T>::value, "T must be a POD type.");
-		const size_type array_bytes = sizeof(T)*size;
+		const size_type array_bytes = aligned_sizeof(sizeof(T)*size);
 		if( mem_available(array_bytes) ) {
 			allocate(array_bytes, array_of_primitives_dtor_xor);
-			return reinterpret_cast<T*>(tos-array_bytes);
+			return reinterpret_cast<T*>(top_object());
 		} else {
 			return NULL;
 		}
@@ -260,83 +268,97 @@ private:
 		);
 	}
 
+	static size_type aligned_sizeof(size_type const size) {
+		const size_type padding = size % alignment ? alignment - size % alignment : 0;
+		return size + padding;
+	}
+
+	template<typename T>
+	static size_type aligned_sizeof() {
+		return aligned_sizeof(sizeof(T));
+	}
+
 	bool mem_available(size_type const size) const {
 		return tos + sizeof(chunk_header) + size < end_of_mem;
 	}
 
   template<typename T>
 	bool mem_available() const {
-		return mem_available(sizeof(T));
+		return mem_available(aligned_sizeof<T>());
+	}
+
+	byte_type* top_object() const {
+		return reinterpret_cast<byte_type*>(top_chunk) + sizeof(chunk_header);
 	}
 
 	template<typename T>
-	T* push() { allocate<T>(); return new(tos-sizeof(T)) T(); }
+	T* push() { allocate<T>(); return new(top_object()) T(); }
 	template<typename T, typename T1>
-	T* push(const T1 &a1) { allocate<T>(); return new(tos-sizeof(T)) T(a1); }
+	T* push(const T1 &a1) { allocate<T>(); return new(top_object()) T(a1); }
   template<typename T, typename T1>
-	T* push(T1 &a1) { allocate<T>(); return new(tos-sizeof(T)) T(a1); }
+	T* push(T1 &a1) { allocate<T>(); return new(top_object()) T(a1); }
 
   template<typename T, typename T1, typename T2>
-	T* push(const T1 &a1, const T2 &a2) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2); }
+	T* push(const T1 &a1, const T2 &a2) { allocate<T>(); return new(top_object()) T(a1, a2); }
   template<typename T, typename T1, typename T2>
-	T* push(T1 &a1, const T2 &a2) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2); }
+	T* push(T1 &a1, const T2 &a2) { allocate<T>(); return new(top_object()) T(a1, a2); }
   template<typename T, typename T1, typename T2>
-	T* push(const T1 &a1, T2 &a2) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2); }
+	T* push(const T1 &a1, T2 &a2) { allocate<T>(); return new(top_object()) T(a1, a2); }
   template<typename T, typename T1, typename T2>
-	T* push(T1 &a1, T2 &a2) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2); }
+	T* push(T1 &a1, T2 &a2) { allocate<T>(); return new(top_object()) T(a1, a2); }
 
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(const T1 &a1, const T2 &a2, const T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(const T1 &a1, const T2 &a2, const T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(T1 &a1, const T2 &a2, const T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(T1 &a1, const T2 &a2, const T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(const T1 &a1, T2 &a2, const T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(const T1 &a1, T2 &a2, const T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(const T1 &a1, const T2 &a2, T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(const T1 &a1, const T2 &a2, T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(const T1 &a1, T2 &a2, T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(const T1 &a1, T2 &a2, T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(T1 &a1, const T2 &a2, T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(T1 &a1, const T2 &a2, T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(T1 &a1, T2 &a2, const T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(T1 &a1, T2 &a2, const T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
   template<typename T, typename T1, typename T2, typename T3>
-	T* push(T1 &a1, T2 &a2, T3 &a3) { allocate<T>(); return new(tos-sizeof(T)) T(a1, a2, a3); }
+	T* push(T1 &a1, T2 &a2, T3 &a3) { allocate<T>(); return new(top_object()) T(a1, a2, a3); }
 
 
   template<typename T, typename T1, typename T2, typename T3, typename T4>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4);
+		return new(top_object()) T(a1, a2, a3, a4);
 	}
   template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5);
+		return new(top_object()) T(a1, a2, a3, a4, a5);
 	}
   template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6);
+		return new(top_object()) T(a1, a2, a3, a4, a5, a6);
 	}
   template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7);
+		return new(top_object()) T(a1, a2, a3, a4, a5, a6, a7);
 	}
   template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7, a8);
+		return new(top_object()) T(a1, a2, a3, a4, a5, a6, a7, a8);
 	}
   template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8, const T9 &a9) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9);
+		return new(top_object()) T(a1, a2, a3, a4, a5, a6, a7, a8, a9);
 	}
   template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9, typename T10>
 	T* push(const T1 &a1, const T2 &a2, const T3 &a3, const T4 &a4, const T5 &a5, const T6 &a6, const T7 &a7, const T8 &a8, const T9 &a9, const T10 &a10) {
 		allocate<T>();
-		return new(tos-sizeof(T)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+		return new(top_object()) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
 	}
  
 
@@ -353,7 +375,7 @@ private:
 	
 	template<typename T>
 	void allocate() {
-		allocate(sizeof(T), xor_fptr(&detail::call_dtor<T>));
+		allocate(aligned_sizeof<T>(), xor_fptr(&detail::call_dtor<T>));
 	}
 	
 	

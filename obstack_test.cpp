@@ -458,28 +458,32 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_ptr_array ) {
 	BOOST_CHECK_EQUAL( x[0], &dummy );
 }
 
+bool is_aligned(const void * p) {
+	return reinterpret_cast<size_t>(p) % 16 == 0;
+}
+
 BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
 	obstack vs(default_size);
 
 	char *c1 = vs.alloc<char>();
 	BOOST_REQUIRE( c1!=NULL );
+	BOOST_CHECK( is_aligned(c1) );
 
-	std::string init("foo");
-	std::string *foo = vs.alloc<std::string>(init);
-	BOOST_REQUIRE( foo!=NULL );
+	std::string *s = vs.alloc<std::string>("foo");
+	BOOST_REQUIRE( s!=NULL );
+	BOOST_CHECK( is_aligned(s) );
 	
 	char *c2 = vs.alloc<char>();
 	BOOST_REQUIRE( c2!=NULL );
+	BOOST_CHECK( is_aligned(s) );
 
 	double *d = vs.alloc<double>();
 	BOOST_REQUIRE( d!=NULL );
+	BOOST_CHECK( is_aligned(d) );
 
-	*d = 42.0;
-
-	BOOST_CHECK_EQUAL( *d, 42.0 );
-
-	std::string bar(*foo);
-	BOOST_CHECK_EQUAL( bar, "foo" );
+	char *c3 = vs.alloc_array<char>(3);
+	BOOST_REQUIRE( c3!=NULL );
+	BOOST_CHECK( is_aligned(c3) );
 }
 
 
