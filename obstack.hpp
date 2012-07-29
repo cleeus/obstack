@@ -180,8 +180,8 @@ public:
 	basic_obstack(void *buffer, size_type buffer_size)
 		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
 			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor)),
-			mem(buffer_size && buffer_size ? static_cast<byte_type*>(buffer)+offset_to_alignment(buffer) : NULL),
-			end_of_mem(buffer ? static_cast<byte_type*>(buffer)+buffer_size : NULL),
+			mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+offset_to_alignment(buffer) : NULL),
+			end_of_mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+buffer_size : NULL),
 			mem_guard(NULL, detail::global_null_deallocator)
 	{
 		BOOST_ASSERT_MSG(mem, "buffer or buffer_size seems to be NULL");
