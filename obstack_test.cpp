@@ -388,7 +388,7 @@ BOOST_AUTO_TEST_CASE( obstack_is_top_one_elem) {
 	BOOST_CHECK( vs.is_top(s) );
 }
 
-BOOST_AUTO_TEST_CASE( obstack_is_top_two_elems) {
+BOOST_AUTO_TEST_CASE( obstack_is_top_two_elems ) {
 	obstack vs(default_size);
 
 	Sensor *s1 = vs.alloc<Sensor>();
@@ -399,6 +399,91 @@ BOOST_AUTO_TEST_CASE( obstack_is_top_two_elems) {
 }
 
 
+BOOST_AUTO_TEST_CASE( obstack_alloc_array ) {
+	obstack vs(default_size);
+
+	char *a = vs.alloc_array<char>(13);
+	BOOST_REQUIRE( a!=NULL );
+
+	for(int i=0; i<13; i++) {
+		a[i] = 42;
+	}
+	BOOST_CHECK_EQUAL( a[0], 42 );
+}
+
+struct double_fun {
+	double x;
+	double y;
+};
+
+BOOST_AUTO_TEST_CASE( obstack_alloc_array_and_struct ) {
+	obstack vs(default_size);
+	
+	char *a = vs.alloc_array<char>(13);
+	BOOST_REQUIRE( a!=NULL );
+
+	double_fun *d = vs.alloc<double_fun>();
+	BOOST_REQUIRE( d!=NULL);
+
+	d->x = 4.2;
+	d->y = 4.2;
+
+	BOOST_CHECK_EQUAL( d->x, 4.2 );
+	BOOST_CHECK_EQUAL( d->y, 4.2 );
+}
+
+BOOST_AUTO_TEST_CASE( obstack_alloc_float_array ) {
+	obstack vs(default_size);
+
+	float *d = vs.alloc_array<float>(13);
+	BOOST_REQUIRE( d!=NULL );
+
+	for(int i=0; i<13; i++) {
+		d[i] = 42.0;
+	}
+	BOOST_CHECK_EQUAL( d[0], 42.0 );
+}
+
+BOOST_AUTO_TEST_CASE( obstack_alloc_ptr_array ) {
+	obstack vs(default_size);
+
+	int **x = vs.alloc_array<int*>(13);
+	BOOST_REQUIRE( x!=NULL );
+	
+	int dummy = 0;
+
+	for(int i=0; i<13; i++) {
+		x[i] = &dummy;
+	}
+	BOOST_CHECK_EQUAL( x[0], &dummy );
+}
+
+BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
+	obstack vs(default_size);
+
+	char *c1 = vs.alloc<char>();
+	BOOST_REQUIRE( c1!=NULL );
+
+	std::string init("foo");
+	std::string *foo = vs.alloc<std::string>(init);
+	BOOST_REQUIRE( foo!=NULL );
+	
+	char *c2 = vs.alloc<char>();
+	BOOST_REQUIRE( c2!=NULL );
+
+	double *d = vs.alloc<double>();
+	BOOST_REQUIRE( d!=NULL );
+
+	*d = 42.0;
+
+	BOOST_CHECK_EQUAL( *d, 42.0 );
+
+	std::string bar(*foo);
+	BOOST_CHECK_EQUAL( bar, "foo" );
+}
+
+
+/*
 BOOST_AUTO_TEST_CASE( obstack_nesting ) {
 
 	_num_dtor_calls = 0;
@@ -423,7 +508,7 @@ BOOST_AUTO_TEST_CASE( obstack_nesting ) {
 
 	BOOST_CHECK_EQUAL( _num_dtor_calls, 2 );
 }
-
+*/
 
 
 BOOST_AUTO_TEST_SUITE_END()

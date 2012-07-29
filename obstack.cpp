@@ -8,7 +8,9 @@ namespace boost {
 namespace obstack {
 namespace detail {
 
-void not_a_dtor(void*) {
+void free_marker_dtor(void*) {
+}
+void array_of_primitives_dtor(void*) {
 }
 
 static size_t seed_from_heap_memory() {

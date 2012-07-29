@@ -4,6 +4,10 @@
 #include <cstddef>
 #include <memory>
 
+#include <boost/type_traits/alignment_of.hpp>
+#include <boost/type_traits/is_pod.hpp>
+#include <boost/static_assert.hpp>
+
 namespace boost {
 namespace obstack {
 namespace detail {
@@ -12,10 +16,15 @@ namespace detail {
 		static_cast<T*>(p)->~T();
 	}
 
-	void not_a_dtor(void*);
+	void free_marker_dtor(void*);
+	void array_of_primitives_dtor(void*);
 
 	//random cookie used to encrypt function pointers
 	extern const void * const fptr_cookie;
+
+	struct alignment_dummy {
+		char x;
+	};
 }
 
 /**
@@ -54,9 +63,12 @@ namespace detail {
  * mem                                  top_chunk   tos     end_of_mem
  *
  *
+ * TODO alignment
+ * TODO support primitive types
+ * TODO support arrays of complex types
+ *
  * TODO use allocators to reserve raw memory
  * TODO support shared pointers from obstack
- * TODO support arrays on obstack
  * TODO support obstack nesting
  * TODO C++11 perfect forwarding constructors with refref and variadic templates
  * TODO implement an allocator on top of obstack
@@ -93,7 +105,8 @@ public:
 	 * \see obstack::overhead
 	 */
 	obstack(size_type capacity)
-		: not_a_dtor(crypt_fptr(&detail::not_a_dtor))
+		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
+			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor))
 	{
 		top_chunk = NULL;
 		mem = new byte_type[capacity];
@@ -174,6 +187,22 @@ public:
 	}
 
 
+	template<typename T>
+	T* alloc_array(size_type size) {
+		BOOST_STATIC_ASSERT_MSG( is_pod<T>::value, "T must be a POD type.");
+
+		const size_type array_bytes = sizeof(T)*size;
+		const size_type alignment = alignment_of<detail::alignment_dummy>::value;
+		const size_type padding_bytes = alignment - array_bytes % alignment;
+		const size_type real_size = array_bytes + padding_bytes;
+
+		if( mem_available(real_size) ) {
+			allocate(real_size, array_of_primitives_dtor_xor);
+			return reinterpret_cast<T*>(tos-real_size);
+		} else {
+			return NULL;
+		}
+	}
 
 	/**
 	 * \brief destruct an object on the obstack and reclaim memory if possible
@@ -234,15 +263,19 @@ private:
 		return reinterpret_cast<const typed_void*>(obj);
 	}
 	
-	static dtor_fptr crypt_fptr(dtor_fptr const fptr) {
+	static dtor_fptr xor_fptr(dtor_fptr const fptr) {
 		return reinterpret_cast<dtor_fptr>(
 			reinterpret_cast<size_t>(fptr) ^ reinterpret_cast<size_t>(detail::fptr_cookie)
 		);
 	}
 
-	template<typename T>
+	bool mem_available(size_type const size) const {
+		return tos + sizeof(chunk_header) + size < end_of_mem;
+	}
+
+  template<typename T>
 	bool mem_available() const {
-		return tos + sizeof(chunk_header) + sizeof(T) < end_of_mem;
+		return mem_available(sizeof(T));
 	}
 
 	template<typename T>
@@ -318,21 +351,18 @@ private:
 
 
 
-
-
-
-
-
-
-	template<typename T>
-	void allocate() {
+	void allocate(size_type const size, dtor_fptr const xored_dtor) {
 		chunk_header * const chead = reinterpret_cast<chunk_header*>(tos);
 		chead->prev = top_chunk;
-		chead->dtor = crypt_fptr(&detail::call_dtor<T>);
+		chead->dtor = xored_dtor;
 		top_chunk = chead;
-		
 		// allocate memory
-		tos += sizeof(chunk_header) + sizeof(T);
+		tos += sizeof(chunk_header) + size;
+	}
+	
+	template<typename T>
+	void allocate() {
+		allocate(sizeof(T), xor_fptr(&detail::call_dtor<T>));
 	}
 	
 	
@@ -383,8 +413,8 @@ private:
 
 
 	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
-		dtor_fptr const dtor = crypt_fptr(chead->dtor);
-		chead->dtor = not_a_dtor;
+		dtor_fptr const dtor = xor_fptr(chead->dtor);
+		chead->dtor = free_marker_dtor_xor;
 		return dtor;
 	}
 
@@ -395,7 +425,7 @@ private:
 	 * complexity: O(k) where k is the number of consecutive destructed chunks
 	 */
 	void deallocate_as_possible() {
-		while(top_chunk && (top_chunk->dtor == not_a_dtor)) {
+		while(top_chunk && (top_chunk->dtor == free_marker_dtor_xor)) {
 			//deallocate memory
 			tos = reinterpret_cast<byte_type*>(top_chunk);
 			top_chunk = top_chunk->prev;
@@ -405,8 +435,10 @@ private:
 
 
 private:
-	//encrypted address of invalid_function_fptr, used to mark dtor as called/invalid
-	const dtor_fptr not_a_dtor;
+	//encrypted address of not_a_dtor, used to mark dtor as called/invalid
+	const dtor_fptr free_marker_dtor_xor;
+	const dtor_fptr array_of_primitives_dtor_xor;
+
 	//top of stack pointer
 	byte_type *tos;
 	//points to the chunk_header before the current tos
