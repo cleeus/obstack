@@ -36,7 +36,7 @@ static size_t make_strong_seed() {
 	return seed;
 }
 
-static void* init_fptr_cookie() {
+static void* init_ptr_xor_cookie() {
 	
 	boost::mt19937 gen;
 	size_t const seed = make_strong_seed();
@@ -49,9 +49,6 @@ static void* init_fptr_cookie() {
 	return reinterpret_cast<void*>(cookie);
 }
 
-const void * const fptr_cookie = init_fptr_cookie();
-
-
 void* malloc_allocator::alloc(size_t size) {
 	return malloc(size);
 }
@@ -63,6 +60,13 @@ void malloc_deallocator::dealloc(void*p) {
 malloc_allocator global_malloc_allocator;
 malloc_deallocator global_malloc_deallocator;
 null_deallocator global_null_deallocator;
+
+static int invalid_addr_reference;
+void * const ptr_sec::_xor_cookie = init_ptr_xor_cookie();
+void * const ptr_sec::_invalid_addr = &invalid_addr_reference;
+
+
+
 
 } //namespace detail
 } //namespace obstack

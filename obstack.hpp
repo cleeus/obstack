@@ -12,72 +12,102 @@
 namespace boost {
 namespace obstack {
 namespace detail {
-	template<class T>
-	void call_dtor(void *p) {
-		static_cast<T*>(p)->~T();
-	}
 
-	void free_marker_dtor(void*);
-	void array_of_primitives_dtor(void*);
-
-	//random cookie used to encrypt function pointers
-	extern const void * const fptr_cookie;
-
-	struct struct_with_max_alignment {
-		char a;
-		short b;
-		int c;
-		long d;
-		//long long e;
-		void *f;
-		double g;
-		float h;
-		long double j;
-	};
-
-	struct general_purpose_alignment {
-		enum {
-			value = alignment_of<struct_with_max_alignment>::value
-		};
-	};
-
-
-	struct memory_allocator_ifc {
-		virtual void* alloc(size_t size)=0;
-	};
-	struct memory_deallocator_ifc {
-		virtual void dealloc(void *p)=0;
-	};
-
-	struct memory_guard {
-		memory_guard(void* memory, memory_deallocator_ifc &deallocator)
-			: deallocator(deallocator),
-				memory(memory)
-		{}
-		~memory_guard() {
-			if(memory) {
-				deallocator.dealloc(memory);
-				memory = NULL;
-			}
-		}
-		memory_deallocator_ifc &deallocator;
-		void* memory;
-	};
-
-	struct malloc_allocator : public memory_allocator_ifc {
-		virtual void* alloc(size_t size);
-	};
-	struct malloc_deallocator : public memory_deallocator_ifc {
-		virtual void dealloc(void*p);
-	};
-	struct null_deallocator : public memory_deallocator_ifc {
-		virtual void dealloc(void*p) {}
-	};
-
-	extern malloc_allocator global_malloc_allocator;
-	extern malloc_deallocator global_malloc_deallocator;
-	extern null_deallocator global_null_deallocator;
+template<class T>
+void call_dtor(void *p) {
+	static_cast<T*>(p)->~T();
 }
+
+void free_marker_dtor(void*);
+void array_of_primitives_dtor(void*);
+
+struct ptr_sec {
+private:
+	///a random cookie used to encrypt function pointers
+	static void* const _xor_cookie;
+	///a value that is guaranteed to be occupied in the address space and cannot be in the heap nor the stack
+	static void* const _invalid_addr;
+
+public:
+	static void* invalid_addr() { return _invalid_addr; }
+	static void* invalid_addr_xor() { return xor_ptr(_invalid_addr); }
+
+	template<typename T>
+	static T* xor_ptr(T* const p) {
+		return reinterpret_cast<T*>(
+			reinterpret_cast<size_t>(p) ^ reinterpret_cast<size_t>(_xor_cookie)
+		);
+	}
+	template<typename T>
+	static const T* xor_ptr(const T* const p) {
+		return reinterpret_cast<const T*>(
+			reinterpret_cast<size_t>(p) ^ reinterpret_cast<size_t>(_xor_cookie)
+		);
+	}
+};
+
+
+
+struct struct_with_max_alignment {
+	char a;
+	short b;
+	int c;
+	long d;
+	//long long e;
+	void *f;
+	double g;
+	float h;
+	long double j;
+};
+
+struct general_purpose_alignment {
+	enum {
+		value = alignment_of<struct_with_max_alignment>::value
+	};
+};
+
+
+struct memory_allocator_ifc {
+	virtual void* alloc(size_t size)=0;
+};
+struct memory_deallocator_ifc {
+	virtual void dealloc(void *p)=0;
+};
+
+class memory_guard {
+public:
+	memory_guard(void* memory, memory_deallocator_ifc &deallocator)
+		: deallocator(deallocator),
+			memory_xor(memory ? ptr_sec::xor_ptr(memory) : ptr_sec::invalid_addr_xor())
+	{}
+
+	~memory_guard() {
+		if(memory_xor != ptr_sec::invalid_addr_xor()) {
+			deallocator.dealloc(ptr_sec::xor_ptr(memory_xor));
+			memory_xor = ptr_sec::invalid_addr_xor();
+		}
+	}
+private:
+	//TODO encrypt dealloc function pointer
+	memory_deallocator_ifc &deallocator;
+	void* memory_xor;
+};
+
+struct malloc_allocator : public memory_allocator_ifc {
+	virtual void* alloc(size_t size);
+};
+struct malloc_deallocator : public memory_deallocator_ifc {
+	virtual void dealloc(void*p);
+};
+struct null_deallocator : public memory_deallocator_ifc {
+	virtual void dealloc(void*p) {}
+};
+
+extern malloc_allocator global_malloc_allocator;
+extern malloc_deallocator global_malloc_deallocator;
+extern null_deallocator global_null_deallocator;
+
+} //namespace detail
 
 /**
  * \class obstack
@@ -120,7 +150,7 @@ namespace detail {
  * TODO support array Ts in normal alloc
  *
  * TODO support shared pointers from obstack
- * TODO support obstack nesting
+ * TODO support explicit obstack nesting
  * TODO C++11 perfect forwarding constructors with refref and variadic templates
  * TODO implement an allocator on top of obstack
  * TODO check pointers in dealloc in DEBUG builds
@@ -356,9 +386,7 @@ private:
 	}
 	
 	static dtor_fptr xor_fptr(dtor_fptr const fptr) {
-		return reinterpret_cast<dtor_fptr>(
-			reinterpret_cast<size_t>(fptr) ^ reinterpret_cast<size_t>(detail::fptr_cookie)
-		);
+		return detail::ptr_sec::xor_ptr(fptr);
 	}
 
 	static size_type aligned_sizeof(size_type const size) {
@@ -371,6 +399,9 @@ private:
 		return aligned_sizeof(sizeof(T));
 	}
 
+	/**
+	 * \brief calculate the required padding bytes to the next fully aligned pointer
+	 */
 	static size_type offset_to_alignment(const void * const p) {
 		const size_type address = reinterpret_cast<size_type>(p);
 		return address % alignment ? (alignment - address%alignment): 0;
