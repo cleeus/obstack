@@ -459,11 +459,13 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_ptr_array ) {
 }
 
 bool is_aligned(const void * p) {
-	return reinterpret_cast<size_t>(p) % 16 == 0;
+	return reinterpret_cast<size_t>(p) % boost::obstack::detail::general_purpose_alignment::value == 0;
 }
 
 BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
 	obstack vs(default_size);
+
+	//std::cout << "alignment: " << boost::obstack::detail::general_purpose_alignment::value << std::endl;
 
 	char *c1 = vs.alloc<char>();
 	BOOST_REQUIRE( c1!=NULL );

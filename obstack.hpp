@@ -22,9 +22,21 @@ namespace detail {
 	//random cookie used to encrypt function pointers
 	extern const void * const fptr_cookie;
 
+	struct max_alignment_finder {
+		char a;
+		short b;
+		int c;
+		long d;
+		//long long e;
+		void *f;
+		double g;
+		float h;
+		long double j;
+	};
+
 	struct general_purpose_alignment {
 		enum {
-			value = 2*sizeof(void*)
+			value = alignment_of<max_alignment_finder>::value
 		};
 	};
 }
