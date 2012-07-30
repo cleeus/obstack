@@ -21,6 +21,11 @@ void call_dtor(void *p) {
 void free_marker_dtor(void*);
 void array_of_primitives_dtor(void*);
 
+typedef void (*dtor_fptr)(void*);
+extern const dtor_fptr free_marker_dtor_xor;
+extern const dtor_fptr array_of_primitives_dtor_xor;
+
+
 struct ptr_sec {
 private:
 	///a random cookie used to encrypt function pointers
@@ -164,7 +169,7 @@ public:
 	enum { alignment = Alignment };
 
 private:
-	typedef void (*dtor_fptr)(void*);
+	typedef detail::dtor_fptr dtor_fptr;
 
 	struct chunk_header {
 		chunk_header *prev;
@@ -187,8 +192,7 @@ public:
 	 *
 	 */
 	basic_obstack(size_type capacity)
-		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
-			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor)),
+	:
 			mem(capacity ? static_cast<byte_type*>(detail::global_malloc_allocator.alloc(capacity)) : NULL),
 			end_of_mem(mem ? mem+capacity : NULL),
 			mem_guard(mem, detail::global_malloc_deallocator)
@@ -208,8 +212,7 @@ public:
 	 * the buffer memory.
 	 */
 	basic_obstack(void *buffer, size_type buffer_size)
-		: free_marker_dtor_xor(xor_fptr(&detail::free_marker_dtor)),
-			array_of_primitives_dtor_xor(xor_fptr(&detail::array_of_primitives_dtor)),
+	:
 			mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+offset_to_alignment(buffer) : NULL),
 			end_of_mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+buffer_size : NULL),
 			mem_guard(NULL, detail::global_null_deallocator)
@@ -318,7 +321,7 @@ public:
 		BOOST_STATIC_ASSERT_MSG( is_pod<T>::value, "T must be a POD type.");
 		const size_type array_bytes = aligned_sizeof(sizeof(T)*num_elements);
 		if( mem_available(array_bytes) ) {
-			allocate(array_bytes, array_of_primitives_dtor_xor);
+			allocate(array_bytes, detail::array_of_primitives_dtor_xor);
 			return reinterpret_cast<T*>(top_object());
 		} else {
 			return NULL;
@@ -558,7 +561,7 @@ private:
 	 */
 	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
 		dtor_fptr const dtor = xor_fptr(chead->dtor);
-		chead->dtor = free_marker_dtor_xor;
+		chead->dtor = detail::free_marker_dtor_xor;
 		return dtor;
 	}
 
@@ -569,7 +572,7 @@ private:
 	 * complexity: O(k) where k is the number of consecutive destructed chunks
 	 */
 	void deallocate_as_possible() {
-		while(top_chunk && (top_chunk->dtor == free_marker_dtor_xor)) {
+		while(top_chunk && (top_chunk->dtor == detail::free_marker_dtor_xor)) {
 			//deallocate memory
 			tos = reinterpret_cast<byte_type*>(top_chunk);
 			top_chunk = top_chunk->prev;
@@ -577,19 +580,15 @@ private:
 	}
 
 private:
-	//encrypted address of not_a_dtor, used to mark dtor as called/invalid
-	const dtor_fptr free_marker_dtor_xor;
-	const dtor_fptr array_of_primitives_dtor_xor;
-
-	//top of stack pointer
-	byte_type* tos;
-	//points to the chunk_header before the current tos
+	///points to the chunk_header before the current tos
 	chunk_header* top_chunk;
-	//reserved memory
+	///top of stack pointer
+	byte_type* tos;
+	///reserved memory
 	byte_type* const mem;
 	//end of reserved memory region
 	byte_type* const end_of_mem;
-
+	//assures deallocation of memory upon destruction
 	detail::memory_guard mem_guard;
 };
 

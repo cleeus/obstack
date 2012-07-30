@@ -64,7 +64,9 @@ null_deallocator global_null_deallocator;
 static int invalid_addr_reference;
 void * const ptr_sec::_xor_cookie = init_ptr_xor_cookie();
 void * const ptr_sec::_invalid_addr = &invalid_addr_reference;
-
+//warning: initialization order is important here
+const dtor_fptr free_marker_dtor_xor = ptr_sec::xor_ptr(&free_marker_dtor);
+const dtor_fptr array_of_primitives_dtor_xor = ptr_sec::xor_ptr(&array_of_primitives_dtor);
 
 
 
