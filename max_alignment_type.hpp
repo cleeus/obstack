@@ -2,22 +2,23 @@
 #define BOOST_MAXALIGNMENT_TYPE_HPP
 
 #include <boost/cstdint.hpp>
+#include <boost/type_traits/alignment_of.hpp>
 
 namespace boost {
 namespace arena {
 namespace detail {
 
 template<typename T1, typename T2, bool T1gtT2>
-struct max_sizeof_impl {
+struct max_alignof_impl {
 	typedef T1 type;
-	enum { value = sizeof(type) };
+	enum { value = alignment_of<type>::value };
 };
 
 //partial specialization on false
 template<typename T1, typename T2>
-struct max_sizeof_impl<T1,T2,false> {
+struct max_alignof_impl<T1,T2,false> {
 	typedef T2 type;
-	enum { value = sizeof(type) };
+	enum { value = alignment_of<type>::value };
 };
 
 struct null_type {};
@@ -34,13 +35,13 @@ template<
 	typename T9 = null_type,
 	typename T10 = null_type
 >
-struct max_sizeof {
+struct max_alignof {
 private:
-	typedef typename max_sizeof<T2,T3,T4,T5,T6,T7,T8,T9,T10>::type end_max_type;
-	typedef max_sizeof<T1,end_max_type> total_max_sizeof;
+	typedef typename max_alignof<T2,T3,T4,T5,T6,T7,T8,T9,T10>::type back_type;
+	typedef max_alignof<T1,back_type> total_type;
 	
-	typedef typename total_max_sizeof::type max_type;
-	enum { max_value = total_max_sizeof::value };
+	typedef typename total_type::type max_type;
+	enum { max_value = total_type::value };
 public:
 	typedef max_type type;
 	enum { value = max_value };
@@ -48,7 +49,7 @@ public:
 
 
 template<typename T1>
-struct max_sizeof<
+struct max_alignof<
 	T1,
 	null_type,
 	null_type,
@@ -62,12 +63,12 @@ struct max_sizeof<
 >
 {
 	typedef T1 type;
-	enum { value = sizeof(type) };
+	enum { value = alignment_of<type>::value };
 };
 
 
 template<typename T1, typename T2>
-struct max_sizeof<
+struct max_alignof<
 	T1,
 	T2,
 	null_type,
@@ -81,9 +82,9 @@ struct max_sizeof<
 >
 {
 private:
-	typedef max_sizeof_impl<T1,T2, (sizeof(T1)>sizeof(T2)) > total_max_sizeof;
-	typedef typename total_max_sizeof::type max_type;
-	enum { max_value = total_max_sizeof::value };
+	typedef max_alignof_impl<T1,T2, (alignment_of<T1>::value > alignment_of<T2>::value) > total_type;
+	typedef typename total_type::type max_type;
+	enum { max_value = total_type::value };
 public:
 	typedef max_type type;
 	enum { value = max_value };
@@ -93,7 +94,7 @@ public:
 } //namespace detail
 
 
-typedef detail::max_sizeof<
+typedef detail::max_alignof<
 	char,
 	short,
 	int,

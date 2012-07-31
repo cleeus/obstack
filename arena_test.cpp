@@ -18,26 +18,26 @@ using boost::arena::obstack;
 BOOST_AUTO_TEST_SUITE(arena_all)
 
 
-BOOST_AUTO_TEST_CASE(max_sizeof_char_double) {
+BOOST_AUTO_TEST_CASE(max_alignof_char_double) {
 	typedef char T1;
 	typedef double T2;
-	typedef typename boost::arena::detail::max_sizeof<T1,T2> Tmax;
+	typedef typename boost::arena::detail::max_alignof<T1,T2> Tmax;
 
 	BOOST_CHECK( sizeof(Tmax::type) == sizeof(T2) );
 	BOOST_CHECK( Tmax::value == sizeof(T2) );
 }
 
-BOOST_AUTO_TEST_CASE(max_sizeof_double_char) {
+BOOST_AUTO_TEST_CASE(max_alignof_double_char) {
 	typedef double T1;
 	typedef char T2;
-	typedef typename boost::arena::detail::max_sizeof<T1,T2> Tmax;
+	typedef typename boost::arena::detail::max_alignof<T1,T2> Tmax;
 
 	BOOST_CHECK( sizeof(Tmax::type) == sizeof(T1) );
 	BOOST_CHECK( Tmax::value == sizeof(T1) );
 }
 
-BOOST_AUTO_TEST_CASE(max_sizeof_9_char_int) {
-	typedef typename boost::arena::detail::max_sizeof<
+BOOST_AUTO_TEST_CASE(max_alignof_9_char_int) {
+	typedef typename boost::arena::detail::max_alignof<
 		char,
 		char,
 		char,
@@ -54,8 +54,8 @@ BOOST_AUTO_TEST_CASE(max_sizeof_9_char_int) {
 	BOOST_CHECK( Tmax::value == sizeof(int) );
 }
 
-BOOST_AUTO_TEST_CASE(max_sizeof_9_char_int_reverse) {
-	typedef typename boost::arena::detail::max_sizeof<
+BOOST_AUTO_TEST_CASE(max_alignof_9_char_int_reverse) {
+	typedef typename boost::arena::detail::max_alignof<
 		int,
 		char,
 		char,
