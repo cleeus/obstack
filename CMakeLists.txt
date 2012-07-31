@@ -5,17 +5,17 @@ find_package(Boost COMPONENTS random unit_test_framework REQUIRED)
 
 add_definitions(-pedantic -Wall -O2)
 
-add_library(obstack
+add_library(boost_arena
 	obstack.cpp
 )
-target_link_libraries(obstack "${Boost_RANDOM_LIBRARY}")
+target_link_libraries(boost_arena "${Boost_RANDOM_LIBRARY}")
 
 
-add_executable(obstack_test
-	obstack_test.cpp
+add_executable(arena_test
+	arena_test.cpp
 )
 
-target_link_libraries(obstack_test
-	obstack
+target_link_libraries(arena_test
+	boost_arena
 	"${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}"
 )

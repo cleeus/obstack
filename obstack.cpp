@@ -8,7 +8,7 @@
 #include "obstack.hpp"
 
 namespace boost {
-namespace obstack {
+namespace arena {
 namespace detail {
 
 void free_marker_dtor(void*) {
@@ -71,6 +71,6 @@ const dtor_fptr array_of_primitives_dtor_xor = ptr_sec::xor_ptr(&array_of_primit
 
 
 } //namespace detail
-} //namespace obstack
+} //namespace arena
 } //namespace boost
 

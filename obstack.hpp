@@ -1,5 +1,5 @@
-#ifndef _BOOST_OBSTACK_HPP
-#define _BOOST_OBSTACK_HPP
+#ifndef BOOST_OBSTACK_HPP
+#define BOOST_OBSTACK_HPP
 
 #include <cstddef>
 #include <memory>
@@ -10,7 +10,7 @@
 #include <boost/static_assert.hpp>
 
 namespace boost {
-namespace obstack {
+namespace arena {
 namespace detail {
 
 template<class T>
@@ -595,7 +595,7 @@ private:
 
 typedef basic_obstack<detail::general_purpose_alignment::value> obstack;
 
-} //namespace obstack
+} //namespace arena
 } //namespace boost
 
-#endif //_BOOST_OBSTACK_HPP
+#endif //BOOST_OBSTACK_HPP

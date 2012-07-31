@@ -7,13 +7,88 @@
 #define BOOST_TEST_MODULE obstack_test
 #include <boost/test/unit_test.hpp>
 #include <boost/function.hpp>
+#include <boost/type_traits/alignment_of.hpp>
+#include <boost/cstdint.hpp>
 
 #include "obstack.hpp"
+#include "max_alignment_type.hpp"
+
+using boost::arena::obstack;
+
+BOOST_AUTO_TEST_SUITE(arena_all)
 
 
-using boost::obstack::obstack;
+BOOST_AUTO_TEST_CASE(max_sizeof_char_double) {
+	typedef char T1;
+	typedef double T2;
+	typedef typename boost::arena::detail::max_sizeof<T1,T2> Tmax;
 
-BOOST_AUTO_TEST_SUITE(obstack_all)
+	BOOST_CHECK( sizeof(Tmax::type) == sizeof(T2) );
+	BOOST_CHECK( Tmax::value == sizeof(T2) );
+}
+
+BOOST_AUTO_TEST_CASE(max_sizeof_double_char) {
+	typedef double T1;
+	typedef char T2;
+	typedef typename boost::arena::detail::max_sizeof<T1,T2> Tmax;
+
+	BOOST_CHECK( sizeof(Tmax::type) == sizeof(T1) );
+	BOOST_CHECK( Tmax::value == sizeof(T1) );
+}
+
+BOOST_AUTO_TEST_CASE(max_sizeof_9_char_int) {
+	typedef typename boost::arena::detail::max_sizeof<
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		int
+	> Tmax;
+
+	BOOST_CHECK( sizeof(Tmax::type) == sizeof(int) );
+	BOOST_CHECK( Tmax::value == sizeof(int) );
+}
+
+BOOST_AUTO_TEST_CASE(max_sizeof_9_char_int_reverse) {
+	typedef typename boost::arena::detail::max_sizeof<
+		int,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char,
+		char
+	> Tmax;
+
+	BOOST_CHECK( sizeof(Tmax::type) == sizeof(int) );
+	BOOST_CHECK( Tmax::value == sizeof(int) );
+}
+
+struct alignment_checker {
+	char a;
+	short b;
+	int c;
+	long d;
+	//long long e;
+	boost::int64_t e;
+	bool f;
+	float g;
+	double h;
+	long double i;
+	void * j;
+};
+
+BOOST_AUTO_TEST_CASE(max_align_t) {
+	BOOST_CHECK( sizeof(boost::arena::max_align_t) == boost::alignment_of<alignment_checker>::value );
+}
 
 class Sensor {
 public:
@@ -459,13 +534,11 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_ptr_array ) {
 }
 
 bool is_aligned(const void * p) {
-	return reinterpret_cast<size_t>(p) % boost::obstack::detail::general_purpose_alignment::value == 0;
+	return reinterpret_cast<size_t>(p) % boost::arena::detail::general_purpose_alignment::value == 0;
 }
 
 BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
 	obstack vs(default_size);
-
-	//std::cout << "alignment: " << boost::obstack::detail::general_purpose_alignment::value << std::endl;
 
 	char *c1 = vs.alloc<char>();
 	BOOST_REQUIRE( c1!=NULL );
