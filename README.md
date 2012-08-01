@@ -148,9 +148,7 @@ and obstack::alloc_array/obstack::dealloc.
 
 Here are some preliminary results run on a tiny Intel Atom netbook
 with gcc-4.5.3 (CFLAGS: -O2) and glibc-2.14.1:
-
 ~~~~~~~
-
 $ time ./arena_benchmark 
 running single threaded allocation benchmarks
   allocs/deallocs per round: 1536
@@ -161,10 +159,9 @@ done, timings:
    new/delete heap: 24544ms
      obstack arena: 1978ms
 
-real  0m54.250s
-user  0m8.603s
-sys 0m44.070s
-
+real    0m54.250s
+user    0m8.603s
+sys     0m44.070s
 ~~~~~~~
 
 Literature
