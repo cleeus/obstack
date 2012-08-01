@@ -37,13 +37,6 @@ some problems. Notably some of these are:
 Some of these problems can in special cases, be adressed with
 custom memory allocators with restricted semantics.
 
-For a good discussion of custom memory allocation strategies,
-and their pros and cons, see for example:
-"Reconsidering custom memory allocation"
-by Berger, Emery D. and Zorn, Benjamin G. and McKinley, Kathryn S.
-in Proceedings of the 17th ACM SIGPLAN conference / OOPSLA '02
-http://doi.acm.org/10.1145/582419.582421
-
 General Purpose Memory Allocators
 ---------------------------------
 
@@ -146,6 +139,22 @@ Boost Pool
 ----------
 
 The boost software libraries already provide pool memory allocators.
-These
 
 
+
+Literature
+==========
+To get an overview of the problem domain, the following literature may be helpful:
+
+* "Reconsidering custom memory allocation", Emery D. Berger, Benjamin G. Zorn and Kathryn S. McKinley,
+  in Proceedings of the 17th ACM SIGPLAN conference / OOPSLA '02,
+  [http://doi.acm.org/10.1145/582419.582421](http://doi.acm.org/10.1145/582419.582421),
+  [http://people.cs.umass.edu/~emery/pubs/berger-oopsla2002.pdf](http://people.cs.umass.edu/~emery/pubs/berger-oopsla2002.pdf)
+* "The Scoped Allocator Model (Rev 2)", Pablo Halpern, N2554=08-0064 in the C++11 commitee WG21 archives on open-std.org,
+  [http://www.open-std.org/jtc1/sc22/WG21/docs/papers/2008/n2554.pdf](http://www.open-std.org/jtc1/sc22/WG21/docs/papers/2008/n2554.pdf)
+* Boost.Pool Documentation,
+  [http://www.boost.org/doc/libs/1_50_0/libs/pool/doc/html/boost_pool/pool.html](http://www.boost.org/doc/libs/1_50_0/libs/pool/doc/html/boost_pool/pool.html)
+* "Custom Memory Allocation in C++", bitsquid blog,
+  [http://bitsquid.blogspot.de/2010/09/custom-memory-allocation-in-c.html](http://bitsquid.blogspot.de/2010/09/custom-memory-allocation-in-c.html)
+* TCMalloc,
+  [http://goog-perftools.sourceforge.net/doc/tcmalloc.html](http://goog-perftools.sourceforge.net/doc/tcmalloc.html)
