@@ -19,3 +19,12 @@ target_link_libraries(arena_test
 	boost_arena
 	"${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}"
 )
+
+add_executable(arena_benchmark
+	arena_benchmark.cpp
+)
+
+target_link_libraries(arena_benchmark
+	boost_arena
+	"${Boost_RANDOM_LIBRARY}"
+)

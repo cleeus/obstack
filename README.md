@@ -140,7 +140,32 @@ Boost Pool
 
 The boost software libraries already provide pool memory allocators.
 
+Obstack Performance
+-------------------
+There is a little benchmark application included. It simply generates a stable sequence
+of allocation sizes and then repeatedly allocates/deallocates them on malloc/free, new/delete
+and obstack::alloc_array/obstack::dealloc.
 
+Here are some preliminary results run on a tiny Intel Atom netbook
+with gcc-4.5.3 (CFLAGS: -O2) and glibc-2.14.1:
+
+~~~~~~~
+
+$ time ./arena_benchmark 
+running single threaded allocation benchmarks
+  allocs/deallocs per round: 1536
+           memory per round: 522280kB
+                     rounds: 1000
+done, timings:
+  malloc/free heap: 23906ms
+   new/delete heap: 24544ms
+     obstack arena: 1978ms
+
+real  0m54.250s
+user  0m8.603s
+sys 0m44.070s
+
+~~~~~~~
 
 Literature
 ==========
