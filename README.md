@@ -63,6 +63,7 @@ a free block nor by requesting new memory from the operation system.
 This often means a fatal out of memory exception.
 
 Heap fragmentation can be reduced with a few techniques:
+* Using a large enough address space (e.g. 64bit).
 * Using fewer objects.
 * Using the stack instead of the heap.
 * Using memory blocks of the same size.
