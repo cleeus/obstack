@@ -142,27 +142,70 @@ The boost software libraries already provide pool memory allocators.
 
 Obstack Performance
 -------------------
-There is a little benchmark application included. It simply generates a stable sequence
-of allocation sizes and then repeatedly allocates/deallocates them on malloc/free, new/delete
-and obstack::alloc_array/obstack::dealloc.
+There is a little benchmark application included.
+It simply generates one stable sequence of random allocation sizes and
+then repeatedly allocates/deallocates them on malloc/free, new/delete
+and obstack::alloc\_array/obstack::dealloc.
+In total about 1GB will be allocated in chunks between 1B and 4MB.
+When using multiple threads, the alloc sequence is split between the threads.
+Every allocator implementation allocates the same sequence of chunks.
 
-Here are some preliminary results run on a tiny Intel Atom netbook
-with gcc-4.5.3 (CFLAGS: -O2) and glibc-2.14.1:
-~~~~~~~
-$ time ./arena_benchmark 
-running single threaded allocation benchmarks
-  allocs/deallocs per round: 1536
-           memory per round: 522280kB
-                     rounds: 1000
-done, timings:
-  malloc/free heap: 23906ms
-   new/delete heap: 24544ms
-     obstack arena: 1978ms
+The obstack benchmark does not include the time required to allocate
+the arena from the heap since this could also be done
+from the stack or only once per program run.
+Also each thread has it's own obstack arena since
+this is exactly what an arena should be used for.
 
-real    0m54.250s
-user    0m8.603s
-sys     0m44.070s
-~~~~~~~
+Here are some preliminary results run on a tiny Intel Atom N450 1.6GHz
+(single core, hyperthreaded) netbook.
+The system runs a linux 3.4 kernel with gcc-4.5.3 (CFLAGS: -O2) and glibc-2.14.1.
+~~~~~~~~
+$ ./arena\_benchmark
+global parameters:
+           cpu cores: 2
+        total memory: 1048576kB
+  min/max block size: 1B/4096kB
+
+running memory management benchmarks with 1 threads
+             memory per thread: 1048576kB
+  alloc/dealloc ops per thread: 514000
+       total alloc/dealloc ops: 514000
+  done!
+  timings:
+              malloc/free heap: 26882ms
+               new/delete heap: 27654ms
+                 obstack arena: 272ms
+
+running memory management benchmarks with 2 threads
+             memory per thread: 524288kB
+  alloc/dealloc ops per thread: 269000
+       total alloc/dealloc ops: 538000
+  done!
+  timings:
+              malloc/free heap: 73787ms
+               new/delete heap: 90000ms
+                 obstack arena: 162ms
+
+running memory management benchmarks with 4 threads
+             memory per thread: 262144kB
+  alloc/dealloc ops per thread: 135000
+       total alloc/dealloc ops: 540000
+  done!
+  timings:
+              malloc/free heap: 108245ms
+               new/delete heap: 108809ms
+                 obstack arena: 125ms
+~~~~~~~~
+
+As you can see, an obstack memory arena
+is orders of magnitudes faster than the linux
+default allocator. You can also see that the default
+linux glibc allocator seriously suffers from lock
+contention when run in multithreaded environments.
+Other allocaters especially tcmalloc or jemalloc might
+scale better. Obstack arenas scale well with the number
+of threads.
+
 
 Literature
 ==========
