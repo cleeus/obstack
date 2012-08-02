@@ -373,12 +373,9 @@ static void benchmark_threaded(
 	}
 
 	std::cout << "running memory management benchmarks with " << num_threads << " threads" << std::endl;
-	std::cout << "                  total memory: " << total_memory / 1024 << "kB" << std::endl;
 	std::cout << "             memory per thread: " << per_thread_memory / 1024 << "kB" << std::endl;
-	std::cout << "            min/max block size: " << min_alloc_size << "B/" << max_alloc_size/1024 << "kB" << std::endl;
 	std::cout << "  alloc/dealloc ops per thread: " << total_allocs * iterations / num_threads << std::endl;
 	std::cout << "       total alloc/dealloc ops: " << total_allocs * iterations << std::endl;
-
 
 	//start benchmarking (create jobs on queue)
 	
@@ -435,7 +432,8 @@ static void benchmark_threaded(
 
 
 	//print statistics
-	std::cout << "  done! timings:" << std::endl;
+	std::cout << "  done!" << std::endl;
+	std::cout << "  timings:" << std::endl;
 	std::cout << "    malloc/free heap: " << timings.get(timing_registry::BENCHMARK_MALLOC_FREE).total_milliseconds() << "ms" << std::endl;
 	std::cout << "     new/delete heap: " << timings.get(timing_registry::BENCHMARK_NEW_DELETE).total_milliseconds() << "ms" << std::endl;
 	std::cout << "       obstack arena: " << timings.get(timing_registry::BENCHMARK_OBSTACK).total_milliseconds() << "ms" << std::endl;
@@ -449,7 +447,11 @@ int main(int argc, char **argv) {
 	const size_t iterations = 1000;
 	
 	const size_t num_cores = boost::thread::hardware_concurrency();
-	std::cout << "detected " << num_cores << " cpu cores" << std::endl;
+	std::cout << "global parameters:" << std::endl;
+	std::cout << "           cpu cores: " << num_cores << std::endl;
+	std::cout << "        total memory: " << total_memory / 1024 << "kB" << std::endl;
+	std::cout << "  min/max block size: " << min_alloc_size << "B/" << max_alloc_size/1024 << "kB" << std::endl;
+	std::cout << std::endl;	
 
 	benchmark_threaded(1, total_memory, min_alloc_size, max_alloc_size, iterations);
 	benchmark_threaded(2, total_memory, min_alloc_size, max_alloc_size, iterations);
