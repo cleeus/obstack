@@ -59,7 +59,8 @@ contigous blocks. This problem is similar to fragmentation in
 harddisk filesystems. Now when the programmer tries to allocate
 a reasonably large block of contigous memory, the memory
 allocator may not be able to fullfill the request, neither be reusing
-a free block nor by requesting new memory from the operation system.
+a free block nor by requesting new memory from the operation system
+because there is no more free region in the address space of the program.
 This often means a fatal out of memory exception.
 
 Heap fragmentation can be reduced with a few techniques:
@@ -130,7 +131,58 @@ no more lock contention which increases scalability.
 
 Overhead
 --------
+For each chunk a general purpose allocator allocates, it most likely
+also needs a small chunk header. So when the programmer allocates
+one byte, the allocator has to add an overhead. Additionally to the
+chunk header/trailer, the allocator also has to add some padding
+to a platform specific alignment border.
+Modern allocators have several optimization techniques for
+efficient allocation of small objects.
 
+Memory overhead usage can be reduce with using pool allocators.
+These are allocators which basically allocate densly packed arrays
+of objects of the same size and can mark them as free with an
+overlayed free list. The disadvantage of pool allocators is,
+that they can only serve objects of the same size.
+
+Obstack cannot help much here. To the contrary: although
+carefully optimized for packing as densly as possible while
+still keeping objects aligned, there has to be an additional
+chunk header per object. Highly optimized general purpose
+allocators may be able to beat obstack here.
+Also obstack, by design, can only free memory in the reverse
+order it was allocated.
+
+Memory Alignment
+================
+
+When implementing custom memory allocators, one has to be aware of
+the concept of alignment. Alignment means, that the platform
+requires an object of a specific type to be located at a
+memory address that is a multiple of a type-specific alignment value.
+E.g. an int value on x86-32 should be aligned to 4byte boundaries.
+On x86, all but a few specific SSE instructions don't require
+the alignment to function, but are much faster when the alignment
+is correct. Other platforms may fail when the alignment is not correct.
+
+The general purpose memory allocator with the malloc/free interface
+has no information about the type the programmer is about to
+allocate. That means it cannot know the alignment requirement
+for the memory block it is about to allocate. To still provide
+correct alignment, the malloc call is guaranteed to return
+a pointer that is suitable for any object.
+It does so by aligning the memory to the highest possible
+alignment value which is the alignment of "long double" on most
+platforms (often 16 bytes). C++11 provides a new type
+std::max\_align\_t which is the type with the highest required alignment.
+The alignment requirement of a compound type (struct, class)
+is the maximum of the alignment requirements of its element types.
+
+The obstack interface is template function '''alloc<T>(...)'''.
+That means at the time of allocation, obstack has knowledge about
+the alignment requirements of an object. It uses this knowledge to
+pack object in memory as densly as possible while still aligning
+them correctly.
 
 
 Obstack in Comparison
