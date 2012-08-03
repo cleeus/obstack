@@ -178,10 +178,10 @@ std::max\_align\_t which is the type with the highest required alignment.
 The alignment requirement of a compound type (struct, class)
 is the maximum of the alignment requirements of its element types.
 
-The obstack interface is template function '''alloc\<T\>(...)'''.
+The obstack interface is template function alloc\<T\>(...).
 That means at the time of allocation, obstack has knowledge about
 the alignment requirements of an object. It uses this knowledge to
-pack object in memory as densly as possible while still aligning
+pack objects in memory as densly as possible while still aligning
 them correctly.
 
 Security
