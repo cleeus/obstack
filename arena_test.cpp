@@ -533,8 +533,9 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_ptr_array ) {
 	BOOST_CHECK_EQUAL( x[0], &dummy );
 }
 
-bool is_aligned(const void * p) {
-	return reinterpret_cast<size_t>(p) % boost::arena::detail::general_purpose_alignment::value == 0;
+template<typename T>
+inline bool is_aligned(const T *p) {
+	return reinterpret_cast<size_t>(p) % boost::alignment_of<T>::value == 0;
 }
 
 BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
@@ -547,10 +548,18 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
 	std::string *s1 = vs.alloc<std::string>("foo");
 	BOOST_REQUIRE( s1!=NULL );
 	BOOST_CHECK( is_aligned(s1) );
-	
+
+	long double *ld = vs.alloc<long double>();
+	BOOST_REQUIRE( ld != NULL );
+	BOOST_CHECK( is_aligned(ld) );
+
 	char *c2 = vs.alloc<char>();
 	BOOST_REQUIRE( c2!=NULL );
 	BOOST_CHECK( is_aligned(c2) );
+	
+	int *i = vs.alloc<int>();
+	BOOST_REQUIRE( i!=NULL );
+	BOOST_CHECK( is_aligned(i) );
 
 	double *d = vs.alloc<double>();
 	BOOST_REQUIRE( d!=NULL );
@@ -577,9 +586,17 @@ BOOST_AUTO_TEST_CASE( obstack_on_stack_space ) {
 	BOOST_REQUIRE( s1!=NULL );
 	BOOST_CHECK( is_aligned(s1) );
 	
+	long double *ld = vs.alloc<long double>();
+	BOOST_REQUIRE( ld != NULL );
+	BOOST_CHECK( is_aligned(ld) );
+
 	char *c2 = vs.alloc<char>();
 	BOOST_REQUIRE( c2!=NULL );
 	BOOST_CHECK( is_aligned(c2) );
+
+	int *i = vs.alloc<int>();
+	BOOST_REQUIRE( i!=NULL );
+	BOOST_CHECK( is_aligned(i) );
 
 	double *d = vs.alloc<double>();
 	BOOST_REQUIRE( d!=NULL );

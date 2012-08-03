@@ -9,6 +9,8 @@
 #include <boost/type_traits/is_pod.hpp>
 #include <boost/static_assert.hpp>
 
+#include "max_alignment_type.hpp"
+
 namespace boost {
 namespace arena {
 namespace detail {
@@ -50,27 +52,6 @@ public:
 		);
 	}
 };
-
-
-
-struct struct_with_max_alignment {
-	char a;
-	short b;
-	int c;
-	long d;
-	//long long e;
-	void *f;
-	double g;
-	float h;
-	long double j;
-};
-
-struct general_purpose_alignment {
-	enum {
-		value = alignment_of<struct_with_max_alignment>::value
-	};
-};
-
 
 struct memory_allocator_ifc {
 	virtual void* alloc(size_t size)=0;
@@ -161,12 +142,12 @@ extern null_deallocator global_null_deallocator;
  * TODO check pointers in dealloc in DEBUG builds
  * TODO deal with exceptions in dealloc_all and the destructor
  */
-template<int Alignment>
-class basic_obstack : noncopyable {
+class obstack
+	: private noncopyable
+{
 public:
 	typedef unsigned char byte_type;
 	typedef std::size_t size_type;
-	enum { alignment = Alignment };
 
 private:
 	typedef detail::dtor_fptr dtor_fptr;
@@ -175,8 +156,14 @@ private:
 		chunk_header *prev;
 		dtor_fptr dtor;
 	};
-	BOOST_STATIC_ASSERT_MSG( alignment > 0 , "alignment must be >0");
-	BOOST_STATIC_ASSERT_MSG( sizeof(chunk_header) % alignment == 0, "alignment guarentees violated");
+
+	template<typename T>
+	struct alignment {
+		enum { value =
+			alignment_of<T>::value > alignment_of<chunk_header>::value ?
+			alignment_of<T>::value : alignment_of<chunk_header>::value
+		};
+	};
 
 	struct typed_void {};
 
@@ -191,8 +178,7 @@ public:
 	 * of the chunk_header and padding to the global alignment
 	 *
 	 */
-	basic_obstack(size_type capacity)
-	:
+	obstack(size_type capacity) :
 			mem(capacity ? static_cast<byte_type*>(detail::global_malloc_allocator.alloc(capacity)) : NULL),
 			end_of_mem(mem ? mem+capacity : NULL),
 			mem_guard(mem, detail::global_malloc_deallocator)
@@ -211,9 +197,12 @@ public:
 	 * its destruction, the user is responsible for the management of
 	 * the buffer memory.
 	 */
-	basic_obstack(void *buffer, size_type buffer_size)
-	:
-			mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+offset_to_alignment(buffer) : NULL),
+	obstack(void *buffer, size_type buffer_size) :
+			mem(
+				buffer && buffer_size ?
+				static_cast<byte_type*>(buffer)+offset_to_alignment(buffer,alignment_of<max_align_t>::value)
+				: NULL
+			),
 			end_of_mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+buffer_size : NULL),
 			mem_guard(NULL, detail::global_null_deallocator)
 	{
@@ -226,7 +215,7 @@ public:
 
 
 
-	~basic_obstack() {
+	~obstack() {
 		dealloc_all();
 	}
 
@@ -319,9 +308,10 @@ public:
 	template<typename T>
 	T* alloc_array(size_type num_elements) {
 		BOOST_STATIC_ASSERT_MSG( is_pod<T>::value, "T must be a POD type.");
-		const size_type array_bytes = aligned_sizeof(sizeof(T)*num_elements);
-		if( mem_available(array_bytes) ) {
-			allocate(array_bytes, detail::array_of_primitives_dtor_xor);
+		const size_type array_bytes = sizeof(T)*num_elements;
+		const size_type align_to = alignment<T>::value; 
+		if( mem_available<T>(num_elements) ) {
+			allocate(align_to, array_bytes, detail::array_of_primitives_dtor_xor);
 			return reinterpret_cast<T*>(top_object());
 		} else {
 			return NULL;
@@ -368,11 +358,13 @@ public:
 	}
 
 	/**
-	 * \brief calculate the overhead in bytes required for allocating an element of a certain type
+	 * \brief calculate the maximum possible overhead in bytes for allocating a number of elements
+	 *
+	 * Overhead may be less, depending on the alignment and the allocated types, but never more
 	 */
-	template<typename T>
-	static size_type overhead() {
-		return sizeof(chunk_header) + aligned_sizeof<T>() - sizeof(T);
+	static size_type max_overhead(const size_type num_elements) {
+		const size_type max_alignment = alignment<max_align_t>::value;
+		return (sizeof(chunk_header)+max_alignment)*num_elements;
 	}
 
 	///get the number of bytes that are already allocated
@@ -392,31 +384,23 @@ private:
 		return detail::ptr_sec::xor_ptr(fptr);
 	}
 
-	static size_type aligned_sizeof(size_type const size) {
-		const size_type padding = size % alignment ? alignment - size % alignment : 0;
-		return size + padding;
-	}
-
-	template<typename T>
-	static size_type aligned_sizeof() {
-		return aligned_sizeof(sizeof(T));
-	}
-
 	/**
 	 * \brief calculate the required padding bytes to the next fully aligned pointer
 	 */
-	static size_type offset_to_alignment(const void * const p) {
+	static size_type offset_to_alignment(const void * const p, const size_type align_to) {
 		const size_type address = reinterpret_cast<size_type>(p);
-		return address % alignment ? (alignment - address%alignment): 0;
-	}
-
-	bool mem_available(size_type const size) const {
-		return tos + sizeof(chunk_header) + size < end_of_mem;
+		return address % align_to ? (align_to - address%align_to): 0;
 	}
 
   template<typename T>
 	bool mem_available() const {
-		return mem_available(aligned_sizeof<T>());
+		const size_type padding = offset_to_alignment(tos,alignment<T>::value);
+		return tos + padding + sizeof(chunk_header) + sizeof(T) < end_of_mem;
+	}
+  template<typename T>
+	bool mem_available(const size_type num_elements) const {
+		const size_type padding = offset_to_alignment(tos,alignment<T>::value);
+		return tos + padding + sizeof(chunk_header) + sizeof(T)*num_elements < end_of_mem;
 	}
 
 	byte_type* top_object() const {
@@ -494,9 +478,8 @@ private:
 	}
  
 
-
-
-	void allocate(size_type const size, dtor_fptr const xored_dtor) {
+	void allocate(size_type const align_to, size_type const size, dtor_fptr const xored_dtor) {
+		tos += offset_to_alignment(tos, align_to);
 		chunk_header * const chead = reinterpret_cast<chunk_header*>(tos);
 		chead->prev = top_chunk;
 		chead->dtor = xored_dtor;
@@ -504,10 +487,10 @@ private:
 		// allocate memory
 		tos += sizeof(chunk_header) + size;
 	}
-	
+
 	template<typename T>
 	void allocate() {
-		allocate(aligned_sizeof<T>(), xor_fptr(&detail::call_dtor<T>));
+		allocate(alignment<T>::value, sizeof(T), xor_fptr(&detail::call_dtor<T>));
 	}
 	
 	
@@ -592,8 +575,6 @@ private:
 	detail::memory_guard mem_guard;
 };
 
-
-typedef basic_obstack<detail::general_purpose_alignment::value> obstack;
 
 } //namespace arena
 } //namespace boost
