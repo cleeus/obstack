@@ -9,11 +9,12 @@
 #include <boost/type_traits/is_pod.hpp>
 #include <boost/static_assert.hpp>
 
+#include "obstack_fwd.hpp"
 #include "max_alignment_type.hpp"
 
 namespace boost {
 namespace arena {
-namespace detail {
+namespace arena_detail {
 
 template<class T>
 void call_dtor(void *p) {
@@ -53,47 +54,96 @@ public:
 	}
 };
 
-struct memory_allocator_ifc {
-	virtual void* alloc(size_t size)=0;
-};
-struct memory_deallocator_ifc {
-	virtual void dealloc(void *p)=0;
-};
+template<class A>
+struct memory_holder {
+	typedef A allocator_type;
+	typedef typename allocator_type::pointer pointer;
+	typedef typename allocator_type::size_type size_type;
+	typedef typename allocator_type::value_type value_type;
 
-class memory_guard {
-public:
-	memory_guard(void* memory, memory_deallocator_ifc &deallocator)
-		: deallocator(deallocator),
-			memory_xor(memory ? ptr_sec::xor_ptr(memory) : ptr_sec::invalid_addr_xor())
+	memory_holder(pointer mem, size_type capacity, allocator_type const &a) :
+		allocator(a),
+		memory(mem),
+		memory_count(capacity)
 	{}
 
-	~memory_guard() {
-		if(memory_xor != ptr_sec::invalid_addr_xor()) {
-			deallocator.dealloc(ptr_sec::xor_ptr(memory_xor));
-			memory_xor = ptr_sec::invalid_addr_xor();
+	memory_holder(size_type const capacity, allocator_type const &a) :
+		allocator(a),
+		memory(allocator.allocate(capacity)),
+		memory_count(capacity)
+	{
+		BOOST_ASSERT_MSG(memory != NULL, "allocate failed");
+	}
+
+	~memory_holder() {
+		if(memory) {
+			allocator.deallocate(memory, memory_count);
 		}
 	}
+
+	pointer mem() const { return memory; }
+	pointer end_of_mem() const { return memory+memory_count; }
+	size_type capacity() const { return memory_count; }
+
 private:
-	//TODO encrypt dealloc function pointer
-	memory_deallocator_ifc &deallocator;
-	void* memory_xor;
+	allocator_type allocator;
+	pointer const memory;
+	size_type const memory_count;
 };
 
-struct malloc_allocator : public memory_allocator_ifc {
-	virtual void* alloc(size_t size);
-};
-struct malloc_deallocator : public memory_deallocator_ifc {
-	virtual void dealloc(void*p);
-};
-struct null_deallocator : public memory_deallocator_ifc {
-	virtual void dealloc(void*p) {}
+
+template<typename A>
+struct octet_holder {
+	typedef A allocator_type;
+	typedef memory_holder<allocator_type> memory_holder_type;
+	typedef unsigned char byte_type;
+	typedef typename std::allocator<byte_type>::size_type size_type;
+	typedef typename std::allocator<byte_type>::pointer pointer;
+
+	typedef typename allocator_type::size_type alloc_size_type;
+	typedef typename allocator_type::value_type alloc_value_type;
+	typedef typename allocator_type::pointer alloc_pointer;
+
+	BOOST_STATIC_ASSERT_MSG(
+		alignment_of<alloc_value_type>::value == alignment_of<max_align_t>::value,
+		"the allocator and memory must be of max_align_t type"
+	);
+
+	octet_holder(alloc_pointer mem, alloc_size_type const capacity, allocator_type const &a) :
+		mem_holder(mem, capacity, a)
+	{
+		BOOST_ASSERT_MSG( is_aligned(mem), "memory alignment error");
+	}
+
+	octet_holder(size_type const capacity_in_bytes, allocator_type const &a)
+		: mem_holder(to_alloc_capacity(capacity_in_bytes), a)
+	{}
+
+
+	pointer mem() const { return to_byte_ptr(mem_holder.mem()); }
+	pointer end_of_mem() const { return to_byte_ptr(mem_holder.end_of_mem()); }
+	size_type capacity() const { return mem_holder.capacity() * sizeof(alloc_value_type); }
+private:
+	static alloc_size_type to_alloc_capacity(size_type const capacity_in_bytes) {
+		const alloc_size_type num_elements =
+			capacity_in_bytes / sizeof(alloc_value_type) + 
+			((capacity_in_bytes % sizeof(alloc_value_type)) ? 1 : 0);
+		return num_elements;
+	}
+
+	static pointer to_byte_ptr(alloc_pointer const p) {
+		return reinterpret_cast<pointer>(p);
+	}
+
+	static bool is_aligned(void *p) {
+		return reinterpret_cast<size_t>(p) % alignment_of<max_align_t>::value == 0;
+	}
+
+	memory_holder_type mem_holder;
 };
 
-extern malloc_allocator global_malloc_allocator;
-extern malloc_deallocator global_malloc_deallocator;
-extern null_deallocator global_null_deallocator;
 
-} //namespace detail
+} //namespace arena_detail
 
 /**
  * \class obstack
@@ -142,15 +192,19 @@ extern null_deallocator global_null_deallocator;
  * TODO check pointers in dealloc in DEBUG builds
  * TODO deal with exceptions in dealloc_all and the destructor
  */
-class obstack
+template<class A>
+class basic_obstack
 	: private noncopyable
 {
+private:
+	typedef arena_detail::octet_holder<A> holder_type;
 public:
-	typedef unsigned char byte_type;
-	typedef std::size_t size_type;
+	typedef A allocator_type;
+	typedef typename holder_type::size_type size_type;
+	typedef typename holder_type::byte_type byte_type;
 
 private:
-	typedef detail::dtor_fptr dtor_fptr;
+	typedef arena_detail::dtor_fptr dtor_fptr;
 
 	struct chunk_header {
 		chunk_header *prev;
@@ -171,51 +225,41 @@ public:
 	/**
 	 * \brief construct an obstack of a given capacity on the heap
 	 *
-	 * Use the global heap (malloc/free) to acquire memory.
+	 * Uses the allocator to acquire memory.
 	 * The capacity of an obstack is the number of bytes for later use.
 	 * When reasoning about the required size, consider the overhead required
 	 * for allocating each object on the obstack which consists of the size
 	 * of the chunk_header and padding to the global alignment
 	 *
 	 */
-	obstack(size_type capacity) :
-			mem(capacity ? static_cast<byte_type*>(detail::global_malloc_allocator.alloc(capacity)) : NULL),
-			end_of_mem(mem ? mem+capacity : NULL),
-			mem_guard(mem, detail::global_malloc_deallocator)
+	explicit basic_obstack(size_type const capacity, const allocator_type &a = allocator_type()) :
+		top_chunk(NULL),
+		memory(capacity, a)
 	{
 		BOOST_ASSERT_MSG(capacity, "obstack with capacity of 0 requested");
-		BOOST_ASSERT_MSG(mem, "global_malloc_allocator returned NULL");
-		tos = mem;
-		top_chunk = NULL;
+		BOOST_ASSERT_MSG(memory.mem(), "global_malloc_allocator returned NULL");
+		tos = memory.mem();
 	}
 
 	/**
 	 * \brief construct an obstack on the given memory buffer
 	 *
 	 * buffer must be a block of memory at least the size of the
-	 * alignment. The obstack will not free the memory upon
-	 * its destruction, the user is responsible for the management of
-	 * the buffer memory.
+	 * alignment. The obstack will free the memory using the supplied allocator.
 	 */
-	obstack(void *buffer, size_type buffer_size) :
-			mem(
-				buffer && buffer_size ?
-				static_cast<byte_type*>(buffer)+offset_to_alignment(buffer,alignment_of<max_align_t>::value)
-				: NULL
-			),
-			end_of_mem(buffer && buffer_size ? static_cast<byte_type*>(buffer)+buffer_size : NULL),
-			mem_guard(NULL, detail::global_null_deallocator)
+	basic_obstack(max_align_t *buffer, size_type const buffer_size, const allocator_type &a) :
+		top_chunk(NULL),
+		memory(
+			buffer && buffer_size ? buffer : NULL,
+			buffer_size,
+			a)
 	{
-		BOOST_ASSERT_MSG(mem, "buffer or buffer_size seems to be NULL");
-		BOOST_ASSERT_MSG(mem < static_cast<byte_type*>(buffer)+buffer_size, "buffer_size to small for alignment offset");
-		tos = mem;
-		top_chunk = NULL;
+		BOOST_ASSERT_MSG(buffer, "supplied buffer is NULL");
+		BOOST_ASSERT_MSG(buffer_size, "supplied buffer_size is 0");
+		tos = memory.mem();
 	}
 
-
-
-
-	~obstack() {
+	~basic_obstack() {
 		dealloc_all();
 	}
 
@@ -311,7 +355,7 @@ public:
 		const size_type array_bytes = sizeof(T)*num_elements;
 		const size_type align_to = alignment<T>::value; 
 		if( mem_available<T>(num_elements) ) {
-			allocate(align_to, array_bytes, detail::array_of_primitives_dtor_xor);
+			allocate(align_to, array_bytes, arena_detail::array_of_primitives_dtor_xor);
 			return reinterpret_cast<T*>(top_object());
 		} else {
 			return NULL;
@@ -368,9 +412,9 @@ public:
 	}
 
 	///get the number of bytes that are already allocated
-	size_type size() const { return static_cast<size_type>(tos-mem); }
+	size_type size() const { return static_cast<size_type>(tos-memory.mem()); }
 	///get the number of bytes that are available in the obstack in total
-	size_type capacity() const { return static_cast<size_type>(end_of_mem-mem); }
+	size_type capacity() const { return memory.capacity(); }
 
 private:
 	static typed_void * to_typed_void(void *obj) {
@@ -381,7 +425,7 @@ private:
 	}
 	
 	static dtor_fptr xor_fptr(dtor_fptr const fptr) {
-		return detail::ptr_sec::xor_ptr(fptr);
+		return arena_detail::ptr_sec::xor_ptr(fptr);
 	}
 
 	/**
@@ -395,12 +439,13 @@ private:
   template<typename T>
 	bool mem_available() const {
 		const size_type padding = offset_to_alignment(tos,alignment<T>::value);
-		return tos + padding + sizeof(chunk_header) + sizeof(T) < end_of_mem;
+		const bool is_available = (tos + padding + sizeof(chunk_header) + sizeof(T)) < memory.end_of_mem();
+		return is_available;
 	}
   template<typename T>
 	bool mem_available(const size_type num_elements) const {
 		const size_type padding = offset_to_alignment(tos,alignment<T>::value);
-		return tos + padding + sizeof(chunk_header) + sizeof(T)*num_elements < end_of_mem;
+		return tos + padding + sizeof(chunk_header) + sizeof(T)*num_elements < memory.end_of_mem();
 	}
 
 	byte_type* top_object() const {
@@ -490,7 +535,7 @@ private:
 
 	template<typename T>
 	void allocate() {
-		allocate(alignment<T>::value, sizeof(T), xor_fptr(&detail::call_dtor<T>));
+		allocate(alignment<T>::value, sizeof(T), xor_fptr(&arena_detail::call_dtor<T>));
 	}
 	
 	
@@ -544,7 +589,7 @@ private:
 	 */
 	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
 		dtor_fptr const dtor = xor_fptr(chead->dtor);
-		chead->dtor = detail::free_marker_dtor_xor;
+		chead->dtor = arena_detail::free_marker_dtor_xor;
 		return dtor;
 	}
 
@@ -555,7 +600,7 @@ private:
 	 * complexity: O(k) where k is the number of consecutive destructed chunks
 	 */
 	void deallocate_as_possible() {
-		while(top_chunk && (top_chunk->dtor == detail::free_marker_dtor_xor)) {
+		while(top_chunk && (top_chunk->dtor == arena_detail::free_marker_dtor_xor)) {
 			//deallocate memory
 			tos = reinterpret_cast<byte_type*>(top_chunk);
 			top_chunk = top_chunk->prev;
@@ -567,13 +612,11 @@ private:
 	chunk_header* top_chunk;
 	///top of stack pointer
 	byte_type* tos;
-	///reserved memory
-	byte_type* const mem;
-	//end of reserved memory region
-	byte_type* const end_of_mem;
 	//assures deallocation of memory upon destruction
-	detail::memory_guard mem_guard;
+	//detail::memory_guard mem_guard;
+	holder_type memory;
 };
+
 
 
 } //namespace arena

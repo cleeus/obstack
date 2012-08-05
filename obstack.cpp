@@ -9,7 +9,7 @@
 
 namespace boost {
 namespace arena {
-namespace detail {
+namespace arena_detail {
 
 void free_marker_dtor(void*) {
 }
@@ -49,18 +49,6 @@ static void* init_ptr_xor_cookie() {
 	return reinterpret_cast<void*>(cookie);
 }
 
-void* malloc_allocator::alloc(size_t size) {
-	return malloc(size);
-}
-
-void malloc_deallocator::dealloc(void*p) {
-	free(p);
-}
-
-malloc_allocator global_malloc_allocator;
-malloc_deallocator global_malloc_deallocator;
-null_deallocator global_null_deallocator;
-
 static int invalid_addr_reference;
 void * const ptr_sec::_xor_cookie = init_ptr_xor_cookie();
 void * const ptr_sec::_invalid_addr = &invalid_addr_reference;
@@ -70,7 +58,7 @@ const dtor_fptr array_of_primitives_dtor_xor = ptr_sec::xor_ptr(&array_of_primit
 
 
 
-} //namespace detail
+} //namespace arena_detail
 } //namespace arena
 } //namespace boost
 

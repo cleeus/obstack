@@ -10,8 +10,10 @@
 #include <boost/type_traits/alignment_of.hpp>
 #include <boost/cstdint.hpp>
 
+
 #include "obstack.hpp"
 #include "max_alignment_type.hpp"
+#include "null_allocator.hpp"
 
 using boost::arena::obstack;
 
@@ -575,8 +577,11 @@ BOOST_AUTO_TEST_CASE( obstack_alloc_alignment_confusion ) {
 }
 
 BOOST_AUTO_TEST_CASE( obstack_on_stack_space ) {
-	unsigned char buffer[default_size];
-	obstack vs(buffer, sizeof(buffer));
+	typedef boost::arena::max_align_t value_type;
+	typedef boost::arena::basic_obstack<boost::arena::null_allocator<value_type> > placeable_obstack;
+
+	value_type buffer[default_size/sizeof(value_type)];
+	placeable_obstack vs(buffer, sizeof(buffer), placeable_obstack::allocator_type());
 	
 	char *c1 = vs.alloc<char>();
 	BOOST_REQUIRE( c1!=NULL );
