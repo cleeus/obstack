@@ -397,7 +397,7 @@ static void benchmark_threaded(
 }
 
 int main(int argc, char **argv) {
-	const size_t total_memory = 1024*1024* 1024;
+	const size_t total_memory = 1024*1024* 512;
 	const size_t min_alloc_size = 1;
 	const size_t max_alloc_size = 1024*1024* 4;
 	const size_t iterations = 1000;
