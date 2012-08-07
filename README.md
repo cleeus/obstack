@@ -186,12 +186,37 @@ them correctly.
 
 Security
 ========
+Memory management is not only a problem of effifiency but also
+one of correctness and thus security.
+When the free operation is supplied
+an invalid pointer that is either not been allocated using
+allocator or already been freed, the behaviour of
+many traditional general purpose allocators is undefined.
+When attackers can force a heap corruption, they can often
+get an arbitrary write into the address space of the program.
+This is often enough to circumvent critical security
+mechanisms and can lead to arbitrary code execution.
+To make the life of attackers a little harder, obstack implements
+a few countermeasures.
 
 Pointer Encryption
 ------------------
+To be able to properly destroy objects without using the delete
+operator and freeing their memory, obstack has to store a
+function pointer to the destructor for each object.
+This function pointer is an ideal target for an arbitrary write
+since an attacker could get immediate code execution.
+To prevent this, obstack encrypts (XORs) the destructor pointers
+with a random cookie value that is initialized on program start.
 
 Pointer Checking
 ----------------
+To prevent operating on non-arena memory in the first place,
+obstack checks the validity of a pointer before attempting
+to delete it.
+This is done by a both, a simple range check if the pointer
+is inside the arena and a fast XOR based checksum on
+the chunk header and a second random cookie.
 
 
 Obstack in Comparison
