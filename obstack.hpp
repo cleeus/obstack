@@ -25,12 +25,15 @@ void free_marker_dtor(void*);
 void array_of_primitives_dtor(void*);
 
 typedef void (*dtor_fptr)(void*);
-extern const dtor_fptr free_marker_dtor_xor;
-extern const dtor_fptr array_of_primitives_dtor_xor;
+extern dtor_fptr const free_marker_dtor_xor;
+extern dtor_fptr const array_of_primitives_dtor_xor;
+extern size_t const checksum_cookie;
 
 
 struct ptr_sec {
 private:
+	///a random cookie used to "checksum" pointers
+	static size_t const _checksum_cookie;
 	///a random cookie used to encrypt function pointers
 	static void* const _xor_cookie;
 	///a value that is guaranteed to be occupied in the address space and cannot be in the heap nor the stack
@@ -52,6 +55,17 @@ public:
 			reinterpret_cast<size_t>(p) ^ reinterpret_cast<size_t>(_xor_cookie)
 		);
 	}
+
+	static size_t make_checksum(const void * const prev, dtor_fptr const xored_dtor) {
+		return
+			reinterpret_cast<size_t>(xored_dtor) ^ 
+			reinterpret_cast<size_t>(prev) ^
+			_checksum_cookie;
+	}
+	static bool checksum_ok(const void * const prev, dtor_fptr const xored_dtor, size_t const checksum) {
+		return checksum == make_checksum(prev, xored_dtor);
+	}
+
 };
 
 template<class A>
@@ -189,7 +203,6 @@ private:
  * TODO support explicit obstack nesting
  * TODO C++11 perfect forwarding constructors with refref and variadic templates
  * TODO implement an allocator on top of obstack
- * TODO check pointers in dealloc in DEBUG builds
  * TODO deal with exceptions in dealloc_all and the destructor
  */
 template<class A>
@@ -209,6 +222,16 @@ private:
 	struct chunk_header {
 		chunk_header *prev;
 		dtor_fptr dtor;
+		size_type checksum;
+	};
+
+	template<typename T>
+	struct max_aligned_sizeof {
+		enum {
+			value = sizeof(T) % alignment_of<max_align_t>::value ?
+							sizeof(T) + (alignment_of<max_align_t>::value - sizeof(T)%alignment_of<max_align_t>::value)
+							: sizeof(T)
+		};
 	};
 
 	template<typename T>
@@ -396,9 +419,16 @@ public:
 	/**
 	 * \brief check whether a given object is on the top of the obstack
 	 */
-	bool is_top(const void *obj) const {
+	bool is_top(void * const obj) const {
 		const chunk_header * const chead = to_chunk_header(to_typed_void(obj));
 		return chead == top_chunk;
+	}
+
+	/**
+	 * \brief check if a given pointer is inside this arena and is a valid pointer to an object.
+	 */
+	bool is_valid(const void * const obj) const {
+		return is_valid(to_chunk_header(obj));
 	}
 
 	/**
@@ -408,7 +438,7 @@ public:
 	 */
 	static size_type max_overhead(const size_type num_elements) {
 		const size_type max_alignment = alignment<max_align_t>::value;
-		return (sizeof(chunk_header)+max_alignment)*num_elements;
+		return (max_aligned_sizeof<chunk_header>::value+max_alignment)*num_elements;
 	}
 
 	///get the number of bytes that are already allocated
@@ -439,17 +469,17 @@ private:
   template<typename T>
 	bool mem_available() const {
 		const size_type padding = offset_to_alignment(tos,alignment<T>::value);
-		const bool is_available = (tos + padding + sizeof(chunk_header) + sizeof(T)) < memory.end_of_mem();
+		const bool is_available = (tos + padding + max_aligned_sizeof<chunk_header>::value + sizeof(T)) < memory.end_of_mem();
 		return is_available;
 	}
   template<typename T>
 	bool mem_available(const size_type num_elements) const {
 		const size_type padding = offset_to_alignment(tos,alignment<T>::value);
-		return tos + padding + sizeof(chunk_header) + sizeof(T)*num_elements < memory.end_of_mem();
+		return tos + padding + max_aligned_sizeof<chunk_header>::value + sizeof(T)*num_elements < memory.end_of_mem();
 	}
 
 	byte_type* top_object() const {
-		return reinterpret_cast<byte_type*>(top_chunk) + sizeof(chunk_header);
+		return reinterpret_cast<byte_type*>(top_chunk) + max_aligned_sizeof<chunk_header>::value;
 	}
 
 	template<typename T>
@@ -522,15 +552,22 @@ private:
 		return new(top_object()) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
 	}
  
+	bool is_valid(const chunk_header * const chead) const {
+		bool const is_inside_arena =
+			reinterpret_cast<const byte_type*>(chead) >= memory.mem() &&
+			reinterpret_cast<const byte_type*>(chead) <= memory.end_of_mem();
+		return is_inside_arena && arena_detail::ptr_sec::checksum_ok(chead->prev, chead->dtor, chead->checksum);
+	}
 
 	void allocate(size_type const align_to, size_type const size, dtor_fptr const xored_dtor) {
 		tos += offset_to_alignment(tos, align_to);
 		chunk_header * const chead = reinterpret_cast<chunk_header*>(tos);
 		chead->prev = top_chunk;
 		chead->dtor = xored_dtor;
+		chead->checksum = arena_detail::ptr_sec::make_checksum(chead->prev, chead->dtor);
 		top_chunk = chead;
 		// allocate memory
-		tos += sizeof(chunk_header) + size;
+		tos += max_aligned_sizeof<chunk_header>::value + size;
 	}
 
 	template<typename T>
@@ -551,9 +588,7 @@ private:
 
 	void pop(chunk_header * const chead, typed_void * const obj) {
 		dtor_fptr dtor = mark_as_destructed(chead);	
-	
 		deallocate_as_possible();
-
 		//might throw
 		dtor(obj);
 	}
@@ -575,22 +610,27 @@ private:
 	}
 
 	static chunk_header *to_chunk_header(typed_void * const obj) {
-		return reinterpret_cast<chunk_header*>(reinterpret_cast<byte_type*>(obj) - sizeof(chunk_header));
+		return reinterpret_cast<chunk_header*>(reinterpret_cast<byte_type*>(obj) - max_aligned_sizeof<chunk_header>::value);
 	}
 	static const chunk_header *to_chunk_header(const typed_void * const obj) {
-		return reinterpret_cast<const chunk_header*>(reinterpret_cast<const byte_type*>(obj) - sizeof(chunk_header));
+		return reinterpret_cast<const chunk_header*>(reinterpret_cast<const byte_type*>(obj) - max_aligned_sizeof<chunk_header>::value);
 	}
 	static typed_void *to_object(chunk_header * const chead) {
-		return to_typed_void(reinterpret_cast<byte_type*>(chead)+sizeof(chunk_header));
+		return to_typed_void(reinterpret_cast<byte_type*>(chead)+max_aligned_sizeof<chunk_header>::value);
 	}
 
 	/**
 	 * \brief mark an item on the obstack as free and decrypt the dtor pointer
 	 */
 	dtor_fptr mark_as_destructed(chunk_header * const chead) const {
-		dtor_fptr const dtor = xor_fptr(chead->dtor);
-		chead->dtor = arena_detail::free_marker_dtor_xor;
-		return dtor;
+		BOOST_ASSERT_MSG(is_valid(chead), "invalid destruction detected");
+		if(is_valid(chead)) {
+			dtor_fptr const dtor = xor_fptr(chead->dtor);
+			chead->dtor = arena_detail::free_marker_dtor_xor;
+			return dtor;
+		} else {
+			return NULL;
+		}
 	}
 
 

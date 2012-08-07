@@ -36,25 +36,30 @@ static size_t make_strong_seed() {
 	return seed;
 }
 
-static void* init_ptr_xor_cookie() {
-	
+static size_t init_cookie() {
 	boost::mt19937 gen;
-	size_t const seed = make_strong_seed();
+	static size_t seed = 0;
+	if(!seed) {
+		seed = make_strong_seed();
+	} else {
+		seed++;
+	}
 
 	gen.seed(seed);
 	boost::uniform_int<size_t> dist(0, std::numeric_limits<size_t>::max());
 
 	size_t const cookie = dist(gen);
 	
-	return reinterpret_cast<void*>(cookie);
+	return cookie;
 }
 
 static int invalid_addr_reference;
-void * const ptr_sec::_xor_cookie = init_ptr_xor_cookie();
+size_t const ptr_sec::_checksum_cookie = init_cookie();
+void * const ptr_sec::_xor_cookie = reinterpret_cast<void*>(init_cookie());
 void * const ptr_sec::_invalid_addr = &invalid_addr_reference;
 //warning: initialization order is important here
-const dtor_fptr free_marker_dtor_xor = ptr_sec::xor_ptr(&free_marker_dtor);
-const dtor_fptr array_of_primitives_dtor_xor = ptr_sec::xor_ptr(&array_of_primitives_dtor);
+dtor_fptr const free_marker_dtor_xor = ptr_sec::xor_ptr(&free_marker_dtor);
+dtor_fptr const array_of_primitives_dtor_xor = ptr_sec::xor_ptr(&array_of_primitives_dtor);
 
 
 
