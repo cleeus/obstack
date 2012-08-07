@@ -183,8 +183,7 @@ static void benchmark_obstack(
 	chunks.resize(alloc_seq.size());
 
 	const size_t alloc_sum = sum_vec(alloc_seq);
-	const size_t required_size = alloc_sum +
-		alloc_seq.size() * boost::alignment_of<boost::arena::max_align_t>::value*2; //maximum possible overhead for alignment and chunks
+	const size_t required_size = alloc_sum + boost::arena::obstack::max_overhead(alloc_seq.size());
 	boost::arena::obstack obs(required_size);
 	
 	start_allocs.wait();
