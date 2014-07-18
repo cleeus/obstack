@@ -55,10 +55,10 @@ Heap Fragmentation
 Heap fragmentation occurs when the heap address space of a programm
 is scattered with small chunks of memory that are in use. Between
 these small chunks there may be lots of free memory but not in
-contigous blocks. This problem is similar to fragmentation in
+contiguous blocks. This problem is similar to fragmentation in
 harddisk filesystems. Now when the programmer tries to allocate
 a reasonably large block of contigous memory, the memory
-allocator may not be able to fullfill the request, neither be reusing
+allocator may not be able to fulfill the request, neither by reusing
 a free block nor by requesting new memory from the operation system
 because there is no more free region in the address space of the program.
 This often means a fatal out of memory exception.
@@ -139,8 +139,8 @@ to a platform specific alignment border.
 Modern allocators have several optimization techniques for
 efficient allocation of small objects.
 
-Memory overhead usage can be reduce with using pool allocators.
-These are allocators which basically allocate densly packed arrays
+Memory overhead usage can be reduced by using pool allocators.
+These are allocators which basically allocate densely packed arrays
 of objects of the same size and can mark them as free with an
 overlayed free list. The disadvantage of pool allocators is,
 that they can only serve objects of the same size.
@@ -186,7 +186,7 @@ them correctly.
 
 Security
 ========
-Memory management is not only a problem of effifiency but also
+Memory management is not only a problem of efficiency but also
 one of correctness and thus security.
 When the free operation is supplied
 an invalid pointer that is either not been allocated using
