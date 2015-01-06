@@ -18,6 +18,18 @@ Distributed under the Boost Software License, Version 1.0.
 See accompanying file LICENSE_1_0.txt or get a copy at
 http://www.boost.org/LICENSE_1_0.txt.
 
+Status of this code
+===================
+
+At the time of writing this code, the C++11/14 ISO papers for scoped
+allocators just appeared and were only implemented in the
+very latest boost.Container library. Implementing an allocator
+or any C++ allocation mechanism without support for N2554
+is pretty pointless and thus my interest faded.
+Nonetheless this is fun stuff to implement and tinker with
+and if I found myself in a position to write a new parser
+(say for json, xml, DER or the likes) I would pick up this
+code and make it production ready.
 
 Rationale
 =========
